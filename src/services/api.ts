@@ -123,24 +123,94 @@ export const api = {
     return res.data;
   },
 
-  // ─── Market Live ──────────────────────────────────────────────────
-  async getMarketLiveFeed(page = 1) {
-    const res = await apiClient.get(`/market-live/videos?page=${page}`);
+  // ═══ NEW: TikTok-style Streams API (replaces market-live + channels) ═══
+  async getStreamsFeed() {
+    const res = await apiClient.get('/streams/feed');
     return res.data;
   },
 
-  async getActiveMarketLiveStreams() {
-    const res = await apiClient.get('/market/market-live/active');
+  async getActiveStreams() {
+    const res = await apiClient.get('/streams/active');
     return res.data;
   },
 
-  async startMarketLiveStream(data: { title?: string; productName?: string; productPrice?: number }) {
-    const res = await apiClient.post('/market/market-live/start', data);
+  async getStream(id: string) {
+    const res = await apiClient.get(`/streams/${id}`);
     return res.data;
   },
 
-  async endMarketLiveStream(streamId: string, recordingUrl?: string, duration?: number) {
-    const res = await apiClient.post(`/market/market-live/${streamId}/end`, { recordingUrl, duration });
+  async startStream(data: { title?: string; description?: string; streamUrl?: string; thumbnailUrl?: string }) {
+    const res = await apiClient.post('/streams/start', data);
+    return res.data;
+  },
+
+  async endStream(id: string, recordingUrl?: string) {
+    const res = await apiClient.post(`/streams/${id}/end`, { recordingUrl });
+    return res.data;
+  },
+
+  async joinStream(id: string) {
+    const res = await apiClient.post(`/streams/${id}/viewer-join`);
+    return res.data;
+  },
+
+  async leaveStream(id: string) {
+    const res = await apiClient.post(`/streams/${id}/viewer-leave`);
+    return res.data;
+  },
+
+  async likeStream(id: string) {
+    const res = await apiClient.post(`/streams/${id}/like`);
+    return res.data;
+  },
+
+  async saveStream(id: string) {
+    const res = await apiClient.post(`/streams/${id}/save`);
+    return res.data;
+  },
+
+  async shareStream(id: string) {
+    const res = await apiClient.post(`/streams/${id}/share`);
+    return res.data;
+  },
+
+  async getStreamChat(id: string) {
+    const res = await apiClient.get(`/streams/${id}/chat`);
+    return res.data;
+  },
+
+  async sendStreamChat(id: string, text: string) {
+    const res = await apiClient.post(`/streams/${id}/chat`, { text });
+    return res.data;
+  },
+
+  async getStreamGifts(id: string) {
+    const res = await apiClient.get(`/streams/${id}/gifts`);
+    return res.data;
+  },
+
+  async sendStreamGift(id: string, giftType: string, message?: string) {
+    const res = await apiClient.post(`/streams/${id}/gift`, { giftType, message });
+    return res.data;
+  },
+
+  async getGiftCatalog() {
+    const res = await apiClient.get('/streams/gifts/catalog');
+    return res.data;
+  },
+
+  async getUserProfile(userId: string) {
+    const res = await apiClient.get(`/users/${userId}`);
+    return res.data;
+  },
+
+  async followUser(userId: string) {
+    const res = await apiClient.post(`/users/${userId}/follow`);
+    return res.data;
+  },
+
+  async unfollowUser(userId: string) {
+    const res = await apiClient.delete(`/users/${userId}/follow`);
     return res.data;
   },
 

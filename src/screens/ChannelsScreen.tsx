@@ -4,8 +4,7 @@
 // Bottom: host info card (avatar, name, verified, followers, follow + msg).
 // Top: LIVE badge + close button.
 //
-// 🔧 Backend is being rebuilt — uses mock empty data until /api/channels/feed
-//    is implemented. All engagement actions are in-memory only.
+// ✅ Backend wired: /api/streams/* (feed, like, save, share, gift, chat, follow)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -84,8 +83,8 @@ export default function ChannelsScreen({ navigation }: any) {
   const loadFeed = useCallback(async () => {
     setLoading(true);
     try {
-      // 🔧 TODO: const data = await api.getChannelsFeed();
-      setStreams(MOCK_STREAMS);
+      const data = await api.getStreamsFeed();
+      setStreams(data.streams || []);
     } catch {
       setStreams([]);
     } finally {
@@ -94,6 +93,12 @@ export default function ChannelsScreen({ navigation }: any) {
   }, []);
 
   useEffect(() => { loadFeed(); }, [loadFeed]);
+
+  // Auto-refresh feed every 30s
+  useEffect(() => {
+    const interval = setInterval(() => loadFeed(), 30000);
+    return () => clearInterval(interval);
+  }, [loadFeed]);
 
   // Fetch wallet balance when gift modal opens
   useEffect(() => {
@@ -107,38 +112,69 @@ export default function ChannelsScreen({ navigation }: any) {
   const currentStream = streams[currentIndex];
 
   // ─── Engagement handlers ───────────────────────────────────────────
-  const handleLike = () => {
+  const handleLike = async () => {
     if (!currentStream) return;
-    const cur = engagement[currentStream.id] || { liked: false, saved: false, likes: currentStream.likes, saves: currentStream.saves, comments: currentStream.comments, shares: currentStream.shares };
-    const liked = !cur.liked;
-    setEngagement(prev => ({ ...prev, [currentStream.id]: { ...cur, liked, likes: cur.likes + (liked ? 1 : -1) } }));
-  };
-
-  const handleSave = () => {
-    if (!currentStream) return;
-    const cur = engagement[currentStream.id] || { liked: false, saved: false, likes: currentStream.likes, saves: currentStream.saves, comments: currentStream.comments, shares: currentStream.shares };
-    const saved = !cur.saved;
-    setEngagement(prev => ({ ...prev, [currentStream.id]: { ...cur, saved, saves: cur.saves + (saved ? 1 : -1) } }));
-  };
-
-  const handleShare = () => {
-    if (!currentStream) return;
-    const cur = engagement[currentStream.id] || { liked: false, saved: false, likes: currentStream.likes, saves: currentStream.saves, comments: currentStream.comments, shares: currentStream.shares };
-    setEngagement(prev => ({ ...prev, [currentStream.id]: { ...cur, shares: cur.shares + 1 } }));
     try {
-      const Share = require('react-native').Share;
-      Share.share({ message: `${currentStream.title}\nhttps://safwatkhokha-nawaqes.hf.space` });
+      const result = await api.likeStream(currentStream.id);
+      setEngagement(prev => ({
+        ...prev,
+        [currentStream.id]: {
+          ...((prev[currentStream.id] || { liked: false, saved: false, likes: currentStream.likes, saves: currentStream.saves, comments: currentStream.comments, shares: currentStream.shares })),
+          liked: result.liked,
+          likes: result.likes,
+        },
+      }));
     } catch {}
   };
 
-  const handleFollow = () => {
+  const handleSave = async () => {
     if (!currentStream) return;
-    setFollowState(prev => ({ ...prev, [currentStream.hostId]: !prev[currentStream.hostId] }));
+    try {
+      const result = await api.saveStream(currentStream.id);
+      setEngagement(prev => ({
+        ...prev,
+        [currentStream.id]: {
+          ...((prev[currentStream.id] || { liked: false, saved: false, likes: currentStream.likes, saves: currentStream.saves, comments: currentStream.comments, shares: currentStream.shares })),
+          saved: result.saved,
+          saves: result.saves,
+        },
+      }));
+    } catch {}
   };
 
-  const handleMessage = () => {
+  const handleShare = async () => {
     if (!currentStream) return;
-    // 🔧 TODO: open chat with host
+    try {
+      await api.shareStream(currentStream.id);
+    } catch {}
+    try {
+      const Share = require('react-native').Share;
+      await Share.share({ message: `${currentStream.title}\nhttps://safwatkhokha-nawaqes.hf.space` });
+    } catch {}
+  };
+
+  const handleFollow = async () => {
+    if (!currentStream) return;
+    const wasFollowing = followState[currentStream.hostId] ?? currentStream.isFollowing;
+    setFollowState(prev => ({ ...prev, [currentStream.hostId]: !wasFollowing }));
+    try {
+      if (wasFollowing) {
+        await api.unfollowUser(currentStream.hostId);
+      } else {
+        await api.followUser(currentStream.hostId);
+      }
+    } catch {
+      setFollowState(prev => ({ ...prev, [currentStream.hostId]: wasFollowing }));
+    }
+  };
+
+  const handleMessage = async () => {
+    if (!currentStream) return;
+    try {
+      const res = await api.client.post('/chat/start', { userId: currentStream.hostId });
+      const chatId = res.data?.id || res.data?.chatId;
+      if (chatId) navigation?.navigate?.('ChatConversation', { chatId });
+    } catch {}
   };
 
   const handleSendGift = async (gift: typeof GIFT_CATALOG[0]) => {
@@ -148,8 +184,8 @@ export default function ChannelsScreen({ navigation }: any) {
     }
     setGiftSending(true);
     try {
-      await new Promise(r => setTimeout(r, 500));
-      if (walletBalance !== null) setWalletBalance(walletBalance - gift.amount);
+      const result = await api.sendStreamGift(currentStream.id, gift.id);
+      if (typeof result?.newBalance === 'number') setWalletBalance(result.newBalance);
       const id = Date.now() + Math.random();
       setFloatingGifts(prev => [...prev, { id, icon: gift.icon, name: gift.name }]);
       setTimeout(() => setFloatingGifts(prev => prev.filter(g => g.id !== id)), 4000);
@@ -157,11 +193,26 @@ export default function ChannelsScreen({ navigation }: any) {
     } catch {} finally { setGiftSending(false); }
   };
 
-  const handleSendChat = () => {
+  const handleSendChat = async () => {
     if (!chatText.trim() || !currentStream) return;
-    setChatMessages(prev => [...prev, { id: Date.now().toString(), user: 'أنت', text: chatText.trim() }]);
+    const text = chatText.trim();
     setChatText('');
+    try {
+      const msg = await api.sendStreamChat(currentStream.id, text);
+      setChatMessages(prev => [...prev, msg]);
+    } catch {
+      setChatText(text);
+    }
   };
+
+  // Load chat when panel opens
+  useEffect(() => {
+    if (showChat && currentStream) {
+      api.getStreamChat(currentStream.id)
+        .then((msgs: any) => setChatMessages(msgs || []))
+        .catch(() => setChatMessages([]));
+    }
+  }, [showChat, currentStream?.id]);
 
   // ─── Vertical scroll handler (snap to next stream) ─────────────────
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -330,7 +381,12 @@ export default function ChannelsScreen({ navigation }: any) {
           <Text style={styles.emptySub}>كن أول من يبدأ البث على نواقص!</Text>
           <TouchableOpacity
             style={styles.startBtn}
-            onPress={() => navigation?.navigate?.('LiveBroadcast')}
+            onPress={async () => {
+              try {
+                await api.startStream({ title: 'بث مباشر جديد' });
+                loadFeed();
+              } catch {}
+            }}
           >
             <Video color="#fff" size={18} />
             <Text style={styles.startBtnText}>ابدأ بثك المباشر</Text>
