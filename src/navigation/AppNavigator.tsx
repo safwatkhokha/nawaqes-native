@@ -121,30 +121,28 @@ export default function AppNavigator() {
   // If forced past loading, treat as not authenticated
   const showAuth = isAuthenticated && !forceLogin;
 
-  return (
+  const navigation = (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {showAuth ? (
-          <NotificationProvider>
-            <>
-              <Stack.Screen name="Main" component={MainTabs} />
-              <Stack.Screen
-                name="CreatePost"
-                component={CreatePostScreen}
-                options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-              />
-              <Stack.Screen name="PostDetail" component={PostDetailScreen} />
-              <Stack.Screen name="Register" component={RegisterScreen} />
-              <Stack.Screen name="ChatList" component={ChatListScreen} />
-              <Stack.Screen name="ChatConversation" component={ChatConversationScreen} />
-              <Stack.Screen name="Search" component={SearchScreen} />
-              <Stack.Screen name="Notifications" component={NotificationsScreen} />
-              <Stack.Screen name="Settings" component={SettingsScreen} />
-              {user?.is_admin ? (
-                <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
-              ) : null}
-            </>
-          </NotificationProvider>
+          <>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen
+              name="CreatePost"
+              component={CreatePostScreen}
+              options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+            />
+            <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+            <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="ChatList" component={ChatListScreen} />
+            <Stack.Screen name="ChatConversation" component={ChatConversationScreen} />
+            <Stack.Screen name="Search" component={SearchScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
+            {user?.is_admin ? (
+              <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+            ) : null}
+          </>
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
@@ -158,6 +156,12 @@ export default function AppNavigator() {
       </Stack.Navigator>
     </NavigationContainer>
   );
+
+  // Wrap with NotificationProvider only when authenticated (outside NavigationContainer)
+  if (showAuth) {
+    return <NotificationProvider>{navigation}</NotificationProvider>;
+  }
+  return navigation;
 }
 
 const styles = StyleSheet.create({
