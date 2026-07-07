@@ -94,7 +94,6 @@ export default function ChannelsScreen({ navigation }: any) {
   const startTimeRef = useRef(0);
   const [hostGifts, setHostGifts] = useState<{ id: number; icon: string; name: string; amount: number; sender: string }[]>([]);
   const [seenGiftIds, setSeenGiftIds] = useState<Set<string>>(new Set());
-  const [lastChatCount, setLastChatCount] = useState(0);
 
   // ─── Load feed ─────────────────────────────────────────────────────
   const loadFeed = useCallback(async () => {
@@ -258,7 +257,6 @@ export default function ChannelsScreen({ navigation }: any) {
     setViewerCount(0);
     setHostGifts([]);
     setSeenGiftIds(new Set());
-    setLastChatCount(0);
     startTimeRef.current = 0;
     loadFeed();
   };
@@ -305,7 +303,7 @@ export default function ChannelsScreen({ navigation }: any) {
       try {
         const stream = await api.getStream(myStream.id);
         if (stream) setViewerCount(stream.viewers || 0);
-        // New gifts
+        // New gifts — use seenGiftIds to never miss any
         const gifts = await api.getStreamGifts(myStream.id).catch(() => []);
         const newGifts = (gifts as any[]).filter((g: any) => !seenGiftIds.has(g.id));
         if (newGifts.length > 0) {
@@ -325,19 +323,27 @@ export default function ChannelsScreen({ navigation }: any) {
             }, idx * 500);
           });
         }
-        // New chat
+        // New chat — use seenChatIds for robustness
         const chat = await api.getStreamChat(myStream.id).catch(() => []);
-        const chatArr = chat as any[];
-        if (chatArr.length > lastChatCount) {
-          setChatMessages(prev => [...prev, ...chatArr.slice(lastChatCount).map((m: any) => ({
-            id: m.id, user: m.user || 'مشاهد', text: m.text,
-          }))].slice(-10));
-          setLastChatCount(chatArr.length);
+        const chatArr = (chat as any[]) || [];
+        const newMsgs = chatArr.filter((m: any) => !seenGiftIds.has('chat_' + m.id));
+        if (newMsgs.length > 0) {
+          setSeenGiftIds(prev => {
+            const next = new Set(prev);
+            newMsgs.forEach(m => next.add('chat_' + m.id));
+            return next;
+          });
+          setChatMessages(prev => {
+            const updated = [...prev, ...newMsgs.map((m: any) => ({
+              id: m.id, user: m.user || m.user_name || 'مشاهد', text: m.text,
+            }))];
+            return updated.slice(-10); // keep last 10
+          });
         }
       } catch {}
     }, 3000);
     return () => clearInterval(interval);
-  }, [isLive, myStream, seenGiftIds, lastChatCount]);
+  }, [isLive, myStream, seenGiftIds]);
 
   // ─── Vertical scroll handler (snap to next stream) ─────────────────
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {

@@ -222,7 +222,9 @@ export const api = {
 
   async getTransactions() {
     const res = await apiClient.get('/wallet/transactions');
-    return res.data;
+    // Backend returns { transactions: [...], total, limit, offset }
+    // Return the array directly so FlatList can render it
+    return res.data?.transactions || res.data || [];
   },
 
   // ─── File uploads ─────────────────────────────────────────────────
