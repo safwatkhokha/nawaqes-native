@@ -381,12 +381,7 @@ export default function ChannelsScreen({ navigation }: any) {
           <Text style={styles.emptySub}>كن أول من يبدأ البث على نواقص!</Text>
           <TouchableOpacity
             style={styles.startBtn}
-            onPress={async () => {
-              try {
-                await api.startStream({ title: 'بث مباشر جديد' });
-                loadFeed();
-              } catch {}
-            }}
+            onPress={() => navigation?.navigate?.('LiveBroadcast', { title: `بث ${user?.name || ''}` })}
           >
             <Video color="#fff" size={18} />
             <Text style={styles.startBtnText}>ابدأ بثك المباشر</Text>
@@ -409,6 +404,15 @@ export default function ChannelsScreen({ navigation }: any) {
           getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
         />
       )}
+
+      {/* ═══ Floating "Go Live" button (always visible) ═══ */}
+      <TouchableOpacity
+        style={styles.goLiveBtn}
+        onPress={() => navigation?.navigate?.('LiveBroadcast', { title: `بث ${user?.name || ''}` })}
+      >
+        <Video color="#fff" size={20} />
+        <Text style={styles.goLiveBtnText}>بث مباشر</Text>
+      </TouchableOpacity>
 
       {/* ═══ Chat panel (slide-up) ═══ */}
       <Modal visible={showChat} transparent animationType="slide">
@@ -579,6 +583,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#a855f7', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16,
   },
   startBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
+  // Floating Go Live button
+  goLiveBtn: {
+    position: 'absolute', bottom: 30, right: 16, zIndex: 100,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#ef4444', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 24,
+    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 8,
+  },
+  goLiveBtnText: { color: '#fff', fontSize: 13, fontWeight: '900' },
   // Loading
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // Chat panel

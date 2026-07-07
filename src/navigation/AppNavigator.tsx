@@ -16,6 +16,7 @@ import WalletScreen from '../screens/WalletScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ChannelsScreen from '../screens/ChannelsScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
+import LiveBroadcastScreen from '../screens/LiveBroadcastScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import ChatListScreen from '../screens/ChatListScreen';
 import ChatConversationScreen from '../screens/ChatConversationScreen';
@@ -133,6 +134,11 @@ export default function AppNavigator() {
               options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
             />
             <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+            <Stack.Screen
+              name="LiveBroadcast"
+              component={LiveBroadcastScreen}
+              options={{ orientation: 'portrait' }}
+            />
             <Stack.Screen name="Register" component={RegisterScreen} />
             <Stack.Screen name="ChatList" component={ChatListScreen} />
             <Stack.Screen name="ChatConversation" component={ChatConversationScreen} />
