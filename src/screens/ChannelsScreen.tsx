@@ -1,24 +1,25 @@
-// ─── Channels Screen (TikTok-style vertical feed) ────────────────────
+// ─── Channels Screen (TikTok-style vertical feed + inline live broadcast) ─
 // Full-screen live streams + recorded videos in a vertical scrolling feed.
 // Right-side action bar: avatar+follow, like, comment, save, gift, share.
 // Bottom: host info card (avatar, name, verified, followers, follow + msg).
 // Top: LIVE badge + close button.
-//
 // ✅ Backend wired: /api/streams/* (feed, like, save, share, gift, chat, follow)
+// ✅ Inline broadcast: camera opens IN THIS SCREEN (no separate page)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, StyleSheet, Dimensions,
   TouchableOpacity, Image, Modal, TextInput, ScrollView,
-  ActivityIndicator, NativeSyntheticEvent, NativeScrollEvent,
+  ActivityIndicator, NativeSyntheticEvent, NativeScrollEvent, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Camera, CameraType, CameraView } from 'expo-camera';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
 import {
   Radio, X, Heart, MessageCircle, Bookmark, Share2,
   UserPlus, Mail, BadgeCheck, Gift, Video, Play, Eye,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, SwitchCamera, Mic, MicOff, Loader2,
 } from 'lucide-react-native';
 
 const { width, height } = Dimensions.get('window');
@@ -78,6 +79,22 @@ export default function ChannelsScreen({ navigation }: any) {
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ id: string; user: string; text: string }[]>([]);
   const [chatText, setChatText] = useState('');
+
+  // ═══ Inline broadcast state (camera opens IN this screen) ═══
+  const [broadcastMode, setBroadcastMode] = useState(false);  // true = showing camera
+  const [hasCameraPerm, setHasCameraPerm] = useState<boolean | null>(null);
+  const [cameraType, setCameraType] = useState<CameraType>('front');
+  const [micOn, setMicOn] = useState(true);
+  const [isLive, setIsLive] = useState(false);
+  const [startingStream, setStartingStream] = useState(false);
+  const [myStream, setMyStream] = useState<any>(null);
+  const [elapsedTime, setElapsedTime] = useState('00:00');
+  const [viewerCount, setViewerCount] = useState(0);
+  const cameraRef = useRef<CameraView>(null);
+  const startTimeRef = useRef(0);
+  const [hostGifts, setHostGifts] = useState<{ id: number; icon: string; name: string; amount: number; sender: string }[]>([]);
+  const [seenGiftIds, setSeenGiftIds] = useState<Set<string>>(new Set());
+  const [lastChatCount, setLastChatCount] = useState(0);
 
   // ─── Load feed ─────────────────────────────────────────────────────
   const loadFeed = useCallback(async () => {
@@ -213,6 +230,114 @@ export default function ChannelsScreen({ navigation }: any) {
         .catch(() => setChatMessages([]));
     }
   }, [showChat, currentStream?.id]);
+
+  // ═══ BROADCAST HANDLERS (inline camera, no separate page) ══════════
+  const enterBroadcastMode = async () => {
+    try {
+      const camPerm = await Camera.requestCameraPermissionsAsync();
+      const micPerm = await Camera.requestMicrophonePermissionsAsync();
+      if (!camPerm.granted || !micPerm.granted) {
+        Alert.alert('إذن مطلوب', 'يحتاج البث إلى إذن الكاميرا والميكروفون');
+        return;
+      }
+      setHasCameraPerm(true);
+      setBroadcastMode(true);
+    } catch {
+      Alert.alert('خطأ', 'تعذر الوصول للكاميرا');
+    }
+  };
+
+  const exitBroadcastMode = async () => {
+    if (isLive && myStream?.id) {
+      try { await api.endStream(myStream.id); } catch {}
+    }
+    setBroadcastMode(false);
+    setIsLive(false);
+    setMyStream(null);
+    setElapsedTime('00:00');
+    setViewerCount(0);
+    setHostGifts([]);
+    setSeenGiftIds(new Set());
+    setLastChatCount(0);
+    startTimeRef.current = 0;
+    loadFeed();
+  };
+
+  const flipCamera = () => setCameraType(prev => prev === 'front' ? 'back' : 'front');
+  const toggleMic = () => setMicOn(prev => !prev);
+
+  const handleStartStream = async () => {
+    setStartingStream(true);
+    try {
+      const stream = await api.startStream({ title: `بث ${user?.name || ''}` });
+      setMyStream(stream);
+      setIsLive(true);
+      startTimeRef.current = Date.now();
+    } catch (err: any) {
+      Alert.alert('خطأ', err?.response?.data?.error || 'فشل بدء البث');
+    } finally {
+      setStartingStream(false);
+    }
+  };
+
+  const handleEndStream = () => {
+    Alert.alert('إنهاء البث', 'هل تريد إنهاء البث؟', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'إنهاء', style: 'destructive', onPress: () => exitBroadcastMode() },
+    ]);
+  };
+
+  // Timer when live
+  useEffect(() => {
+    if (isLive && startTimeRef.current) {
+      const interval = setInterval(() => {
+        const e = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setElapsedTime(`${String(Math.floor(e / 60)).padStart(2, '0')}:${String(e % 60).padStart(2, '0')}`);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isLive]);
+
+  // Poll viewer count + gifts + chat while live (host side)
+  useEffect(() => {
+    if (!isLive || !myStream?.id) return;
+    const interval = setInterval(async () => {
+      try {
+        const stream = await api.getStream(myStream.id);
+        if (stream) setViewerCount(stream.viewers || 0);
+        // New gifts
+        const gifts = await api.getStreamGifts(myStream.id).catch(() => []);
+        const newGifts = (gifts as any[]).filter((g: any) => !seenGiftIds.has(g.id));
+        if (newGifts.length > 0) {
+          setSeenGiftIds(prev => {
+            const next = new Set(prev);
+            newGifts.forEach(g => next.add(g.id));
+            return next;
+          });
+          newGifts.forEach((g: any, idx: number) => {
+            const giftId = Date.now() + Math.random() + idx;
+            setTimeout(() => {
+              setHostGifts(prev => [...prev, {
+                id: giftId, icon: g.gift_icon || '🎁', name: g.gift_name || 'هدية',
+                amount: g.amount || 0, sender: g.sender_name || 'مشاهد',
+              }]);
+              setTimeout(() => setHostGifts(prev => prev.filter(x => x.id !== giftId)), 4000);
+            }, idx * 500);
+          });
+        }
+        // New chat
+        const chat = await api.getStreamChat(myStream.id).catch(() => []);
+        const chatArr = chat as any[];
+        if (chatArr.length > lastChatCount) {
+          setChatMessages(prev => [...prev, ...chatArr.slice(lastChatCount).map((m: any) => ({
+            id: m.id, user: m.user || 'مشاهد', text: m.text,
+          }))].slice(-10));
+          setLastChatCount(chatArr.length);
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isLive, myStream, seenGiftIds, lastChatCount]);
 
   // ─── Vertical scroll handler (snap to next stream) ─────────────────
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -371,6 +496,122 @@ export default function ChannelsScreen({ navigation }: any) {
   // ═══════════════════════════════════════════════════════════════════
   return (
     <View style={styles.container}>
+      {/* ═══ BROADCAST MODE (camera inline, same screen) ═══ */}
+      {broadcastMode ? (
+        <View style={styles.broadcastContainer}>
+          {/* Camera preview fills the screen */}
+          {hasCameraPerm && (
+            <CameraView
+              ref={cameraRef}
+              style={styles.camera}
+              facing={cameraType}
+              mode="video"
+              mute={!micOn}
+            />
+          )}
+
+          {/* Top bar: close + live badge + timer + viewers */}
+          <View style={styles.broadcastTopBar}>
+            <TouchableOpacity style={styles.broadcastCloseBtn} onPress={exitBroadcastMode}>
+              <X color="#fff" size={22} />
+            </TouchableOpacity>
+            {isLive ? (
+              <View style={styles.broadcastLiveStats}>
+                <View style={styles.broadcastLiveBadge}>
+                  <Radio color="#fff" size={12} />
+                  <Text style={styles.broadcastLiveText}>مباشر</Text>
+                </View>
+                <Text style={styles.broadcastTimer}>{elapsedTime}</Text>
+                <View style={styles.broadcastViewerBadge}>
+                  <Eye color="#fff" size={12} />
+                  <Text style={styles.broadcastViewerText}>{viewerCount}</Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.broadcastPreviewText}>معاينة الكاميرا</Text>
+            )}
+          </View>
+
+          {/* Right controls: flip camera + mic */}
+          <View style={styles.broadcastRightControls}>
+            <TouchableOpacity style={styles.broadcastControlBtn} onPress={flipCamera}>
+              <SwitchCamera color="#fff" size={22} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.broadcastControlBtn, !micOn && styles.broadcastControlBtnDanger]}
+              onPress={toggleMic}
+            >
+              {micOn ? <Mic color="#fff" size={22} /> : <MicOff color="#fff" size={22} />}
+            </TouchableOpacity>
+          </View>
+
+          {/* Chat overlay (host sees incoming chat) */}
+          {isLive && chatMessages.length > 0 && (
+            <View style={styles.broadcastChatOverlay}>
+              {chatMessages.slice(-5).map((msg, idx) => (
+                <View key={msg.id || idx} style={styles.broadcastChatMsg}>
+                  <Text style={styles.broadcastChatUser}>{msg.user}:</Text>
+                  <Text style={styles.broadcastChatText}>{msg.text}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Incoming gifts overlay */}
+          {hostGifts.map(g => (
+            <View key={g.id} style={styles.broadcastGiftOverlay}>
+              <Text style={styles.broadcastGiftIcon}>{g.icon}</Text>
+              <View style={styles.broadcastGiftInfo}>
+                <Text style={styles.broadcastGiftText}>{g.sender} أرسل {g.name}</Text>
+                <Text style={styles.broadcastGiftAmount}>{g.amount} ج.م</Text>
+              </View>
+            </View>
+          ))}
+
+          {/* Bottom: host info + start/end button */}
+          <View style={styles.broadcastBottomBar}>
+            {/* Host info (same style as viewer feed) */}
+            <View style={styles.hostRow}>
+              <Image
+                source={{ uri: user?.avatar ? (user.avatar.startsWith('http') ? user.avatar : `https://safwatkhokha-nawaqes.hf.space${user.avatar}`) : `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'me'}` }}
+                style={styles.hostAvatar}
+              />
+              <View style={styles.hostInfo}>
+                <View style={styles.hostNameRow}>
+                  <Text style={styles.hostName} numberOfLines={1}>@{user?.name || 'مستخدم'}</Text>
+                  {user?.is_verified ? <BadgeCheck color="#3b82f6" size={14} /> : null}
+                </View>
+                <Text style={styles.hostFollowers}>أنت تبث الآن</Text>
+              </View>
+            </View>
+
+            {/* Start/End button */}
+            {!isLive ? (
+              <TouchableOpacity
+                style={[styles.broadcastStartBtn, startingStream && styles.broadcastStartBtnDisabled]}
+                onPress={handleStartStream}
+                disabled={startingStream}
+              >
+                {startingStream ? (
+                  <Loader2 color="#fff" size={20} />
+                ) : (
+                  <>
+                    <Radio color="#fff" size={20} />
+                    <Text style={styles.broadcastStartBtnText}>بدء البث المباشر</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.broadcastEndBtn} onPress={handleEndStream}>
+                <X color="#fff" size={20} />
+                <Text style={styles.broadcastEndBtnText}>إنهاء البث</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      ) : (
+      /* ═══ NORMAL FEED MODE (viewer) ═══ */
+      <>
       {streams.length === 0 && !loading ? (
         // ═══ Empty state ═══
         <View style={styles.emptyState}>
@@ -381,7 +622,7 @@ export default function ChannelsScreen({ navigation }: any) {
           <Text style={styles.emptySub}>كن أول من يبدأ البث على نواقص!</Text>
           <TouchableOpacity
             style={styles.startBtn}
-            onPress={() => navigation?.navigate?.('LiveBroadcast', { title: `بث ${user?.name || ''}` })}
+            onPress={enterBroadcastMode}
           >
             <Video color="#fff" size={18} />
             <Text style={styles.startBtnText}>ابدأ بثك المباشر</Text>
@@ -405,14 +646,16 @@ export default function ChannelsScreen({ navigation }: any) {
         />
       )}
 
-      {/* ═══ Floating "Go Live" button (always visible) ═══ */}
+      {/* ═══ Floating "Go Live" button (always visible in feed mode) ═══ */}
       <TouchableOpacity
         style={styles.goLiveBtn}
-        onPress={() => navigation?.navigate?.('LiveBroadcast', { title: `بث ${user?.name || ''}` })}
+        onPress={enterBroadcastMode}
       >
         <Video color="#fff" size={20} />
         <Text style={styles.goLiveBtnText}>بث مباشر</Text>
       </TouchableOpacity>
+      </>  // close fragment for feed mode
+      )}
 
       {/* ═══ Chat panel (slide-up) ═══ */}
       <Modal visible={showChat} transparent animationType="slide">
@@ -622,4 +865,73 @@ const styles = StyleSheet.create({
   giftIcon: { fontSize: 28 },
   giftName: { color: '#fff', fontSize: 10, fontWeight: '700' },
   giftPrice: { color: '#a855f7', fontSize: 10, fontWeight: '800' },
+  // ═══ Broadcast mode styles (inline camera) ═══
+  broadcastContainer: { flex: 1, backgroundColor: '#000' },
+  camera: { flex: 1 },
+  broadcastTopBar: {
+    position: 'absolute', top: 50, left: 0, right: 0,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, zIndex: 10,
+  },
+  broadcastCloseBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center',
+  },
+  broadcastPreviewText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  broadcastLiveStats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  broadcastLiveBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: '#ef4444', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+  },
+  broadcastLiveText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  broadcastTimer: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  broadcastViewerBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14,
+  },
+  broadcastViewerText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  broadcastRightControls: {
+    position: 'absolute', right: 16, top: '50%', transform: [{ translateY: -50 }],
+    gap: 12, zIndex: 10,
+  },
+  broadcastControlBtn: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center',
+  },
+  broadcastControlBtnDanger: { backgroundColor: '#ef4444' },
+  broadcastChatOverlay: {
+    position: 'absolute', top: 120, left: 12, right: 80, zIndex: 15, gap: 4,
+  },
+  broadcastChatMsg: {
+    flexDirection: 'row', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 12, alignSelf: 'flex-start', flexWrap: 'wrap',
+  },
+  broadcastChatUser: { color: '#a855f7', fontSize: 11, fontWeight: '700' },
+  broadcastChatText: { color: '#fff', fontSize: 11 },
+  broadcastGiftOverlay: {
+    position: 'absolute', top: 200, left: '50%', transform: [{ translateX: -100 }],
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(168,85,247,0.85)', paddingHorizontal: 16, paddingVertical: 10,
+    borderRadius: 20, zIndex: 50,
+  },
+  broadcastGiftIcon: { fontSize: 32 },
+  broadcastGiftInfo: { alignItems: 'flex-start' },
+  broadcastGiftText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  broadcastGiftAmount: { color: '#fbbf24', fontSize: 12, fontWeight: '900' },
+  broadcastBottomBar: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    padding: 16, paddingBottom: 24, zIndex: 20,
+  },
+  broadcastStartBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#ef4444', borderRadius: 14, paddingVertical: 16, marginTop: 12,
+  },
+  broadcastStartBtnDisabled: { opacity: 0.6 },
+  broadcastStartBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  broadcastEndBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#dc2626', borderRadius: 14, paddingVertical: 16, marginTop: 12,
+  },
+  broadcastEndBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
 });
