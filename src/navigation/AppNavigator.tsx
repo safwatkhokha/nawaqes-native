@@ -23,6 +23,7 @@ import SearchScreen from '../screens/SearchScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
+import { NotificationProvider } from '../contexts/NotificationContext';
 
 // ─── Bottom Tabs ────────────────────────────────────────────────────
 const Tab = createBottomTabNavigator();
@@ -124,24 +125,26 @@ export default function AppNavigator() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {showAuth ? (
-          <>
-            <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen
-              name="CreatePost"
-              component={CreatePostScreen}
-              options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-            />
-            <Stack.Screen name="PostDetail" component={PostDetailScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="ChatList" component={ChatListScreen} />
-            <Stack.Screen name="ChatConversation" component={ChatConversationScreen} />
-            <Stack.Screen name="Search" component={SearchScreen} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} />
-            <Stack.Screen name="Settings" component={SettingsScreen} />
-            {user?.is_admin ? (
-              <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
-            ) : null}
-          </>
+          <NotificationProvider>
+            <>
+              <Stack.Screen name="Main" component={MainTabs} />
+              <Stack.Screen
+                name="CreatePost"
+                component={CreatePostScreen}
+                options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
+              />
+              <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+              <Stack.Screen name="Register" component={RegisterScreen} />
+              <Stack.Screen name="ChatList" component={ChatListScreen} />
+              <Stack.Screen name="ChatConversation" component={ChatConversationScreen} />
+              <Stack.Screen name="Search" component={SearchScreen} />
+              <Stack.Screen name="Notifications" component={NotificationsScreen} />
+              <Stack.Screen name="Settings" component={SettingsScreen} />
+              {user?.is_admin ? (
+                <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+              ) : null}
+            </>
+          </NotificationProvider>
         ) : (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
