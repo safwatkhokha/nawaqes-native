@@ -72,13 +72,23 @@ export default function ChannelsScreen({ navigation }: any) {
   const [giftSending, setGiftSending] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
-  // Floating gifts animation
+  // Floating gifts animation (viewer sees these when sending a gift)
   const [floatingGifts, setFloatingGifts] = useState<{ id: number; icon: string; name: string }[]>([]);
+  // Floating hearts animation (when liking)
+  const [floatingHearts, setFloatingHearts] = useState<number[]>([]);
+  // Stream gifts ticker (shows recent gifts from all viewers on the stream)
+  const [streamGiftsTicker, setStreamGiftsTicker] = useState<{ id: string; icon: string; name: string; sender: string }[]>([]);
+  const [seenTickerGiftIds, setSeenTickerGiftIds] = useState<Set<string>>(new Set());
+  // Total gifts counter for current stream
+  const [totalGifts, setTotalGifts] = useState(0);
 
   // Chat panel
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<{ id: string; user: string; text: string }[]>([]);
   const [chatText, setChatText] = useState('');
+
+  // Stream title/description editor (broadcast mode)
+  const [streamTitle, setStreamTitle] = useState('');
 
   // ═══ Inline broadcast state (camera opens IN this screen) ═══
   const [broadcastMode, setBroadcastMode] = useState(false);  // true = showing camera
@@ -130,6 +140,10 @@ export default function ChannelsScreen({ navigation }: any) {
   // ─── Engagement handlers ───────────────────────────────────────────
   const handleLike = async () => {
     if (!currentStream) return;
+    // Spawn floating heart animation
+    const heartId = Date.now() + Math.random();
+    setFloatingHearts(prev => [...prev, heartId]);
+    setTimeout(() => setFloatingHearts(prev => prev.filter(h => h !== heartId)), 3000);
     try {
       const result = await api.likeStream(currentStream.id);
       setEngagement(prev => ({
@@ -196,17 +210,27 @@ export default function ChannelsScreen({ navigation }: any) {
   const handleSendGift = async (gift: typeof GIFT_CATALOG[0]) => {
     if (!currentStream) return;
     if (walletBalance !== null && walletBalance < gift.amount) {
+      Alert.alert('رصيد غير كافٍ', `تحتاج ${gift.amount} ج.م — رصيدك: ${walletBalance} ج.م`);
       return;
     }
     setGiftSending(true);
     try {
       const result = await api.sendStreamGift(currentStream.id, gift.id);
       if (typeof result?.newBalance === 'number') setWalletBalance(result.newBalance);
+      // Floating gift animation (viewer's own gift)
       const id = Date.now() + Math.random();
       setFloatingGifts(prev => [...prev, { id, icon: gift.icon, name: gift.name }]);
       setTimeout(() => setFloatingGifts(prev => prev.filter(g => g.id !== id)), 4000);
+      // Add to gifts ticker (visible to all)
+      setStreamGiftsTicker(prev => [...prev, {
+        id: 'self_' + id, icon: gift.icon, name: gift.name, sender: user?.name || 'أنت',
+      }].slice(-5));
+      setTotalGifts(prev => prev + 1);
       setShowGiftModal(false);
-    } catch {} finally { setGiftSending(false); }
+      Alert.alert('تم ✓', `تم إرسال ${gift.icon} ${gift.name}!`);
+    } catch (err: any) {
+      Alert.alert('خطأ', err?.response?.data?.error || 'فشل إرسال الهدية');
+    } finally { setGiftSending(false); }
   };
 
   const handleSendChat = async () => {
@@ -229,6 +253,43 @@ export default function ChannelsScreen({ navigation }: any) {
         .catch(() => setChatMessages([]));
     }
   }, [showChat, currentStream?.id]);
+
+  // ═══ Poll stream gifts ticker (viewer sees gifts from ALL viewers) ═══
+  useEffect(() => {
+    if (!currentStream || broadcastMode) return;
+    const interval = setInterval(async () => {
+      try {
+        const gifts = await api.getStreamGifts(currentStream.id).catch(() => []);
+        const giftsArr = (gifts as any[]) || [];
+        // Update total gifts count
+        if (giftsArr.length > 0) {
+          setTotalGifts(giftsArr.length);
+        }
+        // Find new gifts not in ticker
+        const newGifts = giftsArr.filter((g: any) => !seenTickerGiftIds.has(g.id));
+        if (newGifts.length > 0) {
+          setSeenTickerGiftIds(prev => {
+            const next = new Set(prev);
+            newGifts.forEach(g => next.add(g.id));
+            return next;
+          });
+          // Add to ticker (skip own gifts — they're already added in handleSendGift)
+          const tickerAdditions = newGifts
+            .filter((g: any) => g.sender_id !== user?.id)
+            .map((g: any) => ({
+              id: g.id,
+              icon: g.gift_icon || '🎁',
+              name: g.gift_name || 'هدية',
+              sender: g.sender_name || 'مشاهد',
+            }));
+          if (tickerAdditions.length > 0) {
+            setStreamGiftsTicker(prev => [...prev, ...tickerAdditions].slice(-5));
+          }
+        }
+      } catch {}
+    }, 4000); // poll every 4s
+    return () => clearInterval(interval);
+  }, [currentStream?.id, broadcastMode, seenTickerGiftIds, user?.id]);
 
   // ═══ BROADCAST HANDLERS (inline camera, no separate page) ══════════
   const enterBroadcastMode = async () => {
@@ -267,7 +328,9 @@ export default function ChannelsScreen({ navigation }: any) {
   const handleStartStream = async () => {
     setStartingStream(true);
     try {
-      const stream = await api.startStream({ title: `بث ${user?.name || ''}` });
+      const stream = await api.startStream({
+        title: streamTitle.trim() || `بث ${user?.name || ''}`,
+      });
       setMyStream(stream);
       setIsLive(true);
       startTimeRef.current = Date.now();
@@ -456,7 +519,7 @@ export default function ChannelsScreen({ navigation }: any) {
           </TouchableOpacity>
         </View>
 
-        {/* ═══ Floating gifts ═══ */}
+        {/* ═══ Floating gifts (viewer's own gifts animation) ═══ */}
         {floatingGifts.map(g => (
           <View key={g.id} style={styles.floatingGift}>
             <Text style={styles.floatingGiftIcon}>{g.icon}</Text>
@@ -465,6 +528,35 @@ export default function ChannelsScreen({ navigation }: any) {
             </View>
           </View>
         ))}
+
+        {/* ═══ Floating hearts (like animation) ═══ */}
+        {floatingHearts.map(id => (
+          <View key={id} style={styles.floatingHeart}>
+            <Text style={{ fontSize: 32 }}>❤️</Text>
+          </View>
+        ))}
+
+        {/* ═══ Gifts ticker (top-left, shows recent gifts from all viewers) ═══ */}
+        {streamGiftsTicker.length > 0 && (
+          <View style={styles.giftsTicker}>
+            {streamGiftsTicker.map((g) => (
+              <View key={g.id} style={styles.tickerItem}>
+                <Text style={styles.tickerIcon}>{g.icon}</Text>
+                <Text style={styles.tickerText} numberOfLines={1}>
+                  <Text style={styles.tickerSender}>{g.sender}</Text> أرسل {g.name}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* ═══ Total gifts badge (top-center, below LIVE badge) ═══ */}
+        {totalGifts > 0 && (
+          <View style={styles.totalGiftsBadge}>
+            <Gift color="#fbbf24" size={12} />
+            <Text style={styles.totalGiftsText}>{totalGifts} هدية</Text>
+          </View>
+        )}
 
         {/* ═══ Bottom host info card ═══ */}
         <View style={styles.bottomCard}>
@@ -590,6 +682,18 @@ export default function ChannelsScreen({ navigation }: any) {
                 <Text style={styles.hostFollowers}>أنت تبث الآن</Text>
               </View>
             </View>
+
+            {/* Title input (before going live) */}
+            {!isLive ? (
+              <TextInput
+                style={styles.titleInput}
+                placeholder="عنوان البث (اختياري)..."
+                placeholderTextColor="#94a3b8"
+                value={streamTitle}
+                onChangeText={setStreamTitle}
+                maxLength={100}
+              />
+            ) : null}
 
             {/* Start/End button */}
             {!isLive ? (
@@ -795,6 +899,35 @@ const styles = StyleSheet.create({
   floatingGiftIcon: { fontSize: 60 },
   floatingGiftLabel: { marginTop: 8, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
   floatingGiftText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  // Floating hearts (like animation)
+  floatingHeart: {
+    position: 'absolute', right: 70, bottom: 200, zIndex: 25,
+  },
+  // Gifts ticker (top-left)
+  giftsTicker: {
+    position: 'absolute', top: 100, left: 12, right: 70, zIndex: 18, gap: 4,
+  },
+  tickerItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 16, alignSelf: 'flex-start', maxWidth: '100%',
+  },
+  tickerIcon: { fontSize: 16 },
+  tickerText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  tickerSender: { color: '#fbbf24', fontWeight: '800' },
+  // Total gifts badge
+  totalGiftsBadge: {
+    position: 'absolute', top: 90, left: '50%', transform: [{ translateX: -50 }],
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(251,191,36,0.2)', paddingHorizontal: 12, paddingVertical: 5,
+    borderRadius: 14, zIndex: 17,
+  },
+  totalGiftsText: { color: '#fbbf24', fontSize: 11, fontWeight: '800' },
+  // Title input (broadcast mode)
+  titleInput: {
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+    color: '#fff', fontSize: 14, marginTop: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  },
   // Bottom host info card
   bottomCard: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
