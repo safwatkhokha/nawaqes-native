@@ -1407,15 +1407,15 @@ export const LoginPage: React.FC = () => {
           <span>حمّل تطبيق نواقص الآن</span>
         </div>
         <a
-          href="https://huggingface.co/datasets/safwatkhokha/nawaqes-backup/resolve/main/nawaqes-native-v2.5.0.apk"
+          href="https://huggingface.co/datasets/safwatkhokha/nawaqes-backup/resolve/main/nawaqes-native-v3.0.0.apk"
           download
           className="flex items-center gap-2.5 px-5 py-3 rounded-xl bg-white/10 backdrop-blur border border-white/20 hover:bg-white/20 transition-all active:scale-95"
           style={{ textDecoration: 'none' }}
         >
           <Download className="w-5 h-5 text-white" />
           <div className="text-start">
-            <p className="text-white text-xs font-bold leading-tight">تطبيق نواقص v2.5.0 Native</p>
-            <p className="text-white/60 text-[9px] leading-tight">APK — السوق الذكي + قنوات + بث مباشر</p>
+            <p className="text-white text-xs font-bold leading-tight">تطبيق نواقص v3.0.0 Native</p>
+            <p className="text-white/60 text-[9px] leading-tight">APK — تحديث شامل لكل الشاشات</p>
           </div>
         </a>
       </motion.div>

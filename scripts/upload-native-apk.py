@@ -22,7 +22,7 @@ hf_token = os.environ.get('HF_TOKEN', token)
 api = HfApi(token=hf_token)
 repo_id = 'safwatkhokha/nawaqes-backup'
 
-APK_VERSION = 'v2.5.0'
+APK_VERSION = 'v3.0.0'
 apk_path = f'/home/z/my-project/download/nawaqes-native-{APK_VERSION}.apk'
 path_in_repo = f'nawaqes-native-{APK_VERSION}.apk'
 
@@ -39,7 +39,7 @@ api.upload_file(
     path_in_repo=path_in_repo,
     repo_id=repo_id,
     repo_type='dataset',
-    commit_message=f'Upload Nawaqes Native {APK_VERSION} APK (SmartMarket screen)',
+    commit_message=f'Upload Nawaqes Native {APK_VERSION} APK (major release — all screens enhanced)',
 )
 
 print(f'[UPLOAD] Done!')
