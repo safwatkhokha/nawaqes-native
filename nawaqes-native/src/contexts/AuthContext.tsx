@@ -13,9 +13,15 @@ interface User {
   is_verified?: boolean;
   is_admin?: boolean;
   wallet_balance?: number;
+  gift_balance?: number;
   gender?: string;
   phone?: string;
   trust_score?: number;
+  location?: string;
+  bio?: string;
+  followers_count?: number;
+  following_count?: number;
+  join_date?: string;
 }
 
 interface AuthContextType {
