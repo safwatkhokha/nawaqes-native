@@ -36,6 +36,8 @@ export default function CreatePostScreen({ navigation }: any) {
   const [category, setCategory] = useState('');
   const [postType, setPostType] = useState<'ad' | 'post'>('ad');
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
+  const [videoUploading, setVideoUploading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [posting, setPosting] = useState(false);
@@ -96,10 +98,35 @@ export default function CreatePostScreen({ navigation }: any) {
     setSelectedImages(prev => prev.filter((_, i) => i !== idx));
   };
 
+  // ─── Pick video ────────────────────────────────────────────────────
+  const pickVideo = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('إذن مطلوب', 'يجب السماح بالوصول للوسائط');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        quality: 0.8,
+        videoMaxDuration: 60, // max 60 seconds
+      });
+
+      if (!result.canceled && result.assets?.[0]) {
+        setSelectedVideo(result.assets[0].uri);
+      }
+    } catch {
+      Alert.alert('خطأ', 'فشل اختيار الفيديو');
+    }
+  };
+
+  const removeVideo = () => setSelectedVideo(null);
+
   // ─── Handle post ───────────────────────────────────────────────────
   const handlePost = async () => {
-    if (!content.trim() && selectedImages.length === 0) {
-      Alert.alert('تنبيه', 'اكتب محتوى أو أضف صورة');
+    if (!content.trim() && selectedImages.length === 0 && !selectedVideo) {
+      Alert.alert('تنبيه', 'اكتب محتوى أو أضف صورة/فيديو');
       return;
     }
 
@@ -124,11 +151,32 @@ export default function CreatePostScreen({ navigation }: any) {
         setUploading(false);
       }
 
+      // Upload video if selected
+      let videoUrl = '';
+      if (selectedVideo) {
+        setVideoUploading(true);
+        setUploading(true);
+        setUploadProgress(0);
+        try {
+          const result = await api.uploadVideo(selectedVideo, (p: number) => setUploadProgress(p));
+          videoUrl = result?.url || '';
+        } catch (err: any) {
+          Alert.alert('خطأ', `فشل رفع الفيديو: ${err?.message || ''}`);
+          setPosting(false);
+          setUploading(false);
+          setVideoUploading(false);
+          return;
+        }
+        setUploading(false);
+        setVideoUploading(false);
+      }
+
       // Create post
       setUploadProgress(100);
       await api.createPost({
         content: content.trim(),
         image: imageUrls.length > 0 ? JSON.stringify(imageUrls) : '',
+        video_url: videoUrl || undefined,
         type: postType,
         price: price ? parseFloat(price) : null,
         location: location.trim(),
@@ -143,6 +191,7 @@ export default function CreatePostScreen({ navigation }: any) {
     } finally {
       setPosting(false);
       setUploading(false);
+      setVideoUploading(false);
       setUploadProgress(0);
     }
   };
@@ -216,8 +265,22 @@ export default function CreatePostScreen({ navigation }: any) {
             </View>
           ) : null}
 
+          {/* Video preview */}
+          {selectedVideo ? (
+            <View style={styles.videoPreviewWrap}>
+              <View style={styles.videoPreview}><VideoIcon color="#a855f7" size={48} /></View>
+              <TouchableOpacity style={styles.removeVideoBtn} onPress={removeVideo}>
+                <X color="#fff" size={16} />
+              </TouchableOpacity>
+              <View style={styles.videoLabel}>
+                <VideoIcon color="#fff" size={12} />
+                <Text style={styles.videoLabelText}>فيديو</Text>
+              </View>
+            </View>
+          ) : null}
+
           {/* Media buttons */}
-          {selectedImages.length < 8 ? (
+          {selectedImages.length < 8 && !selectedVideo ? (
             <View style={styles.mediaRow}>
               <TouchableOpacity style={styles.mediaBtn} onPress={pickImages}>
                 <ImageIcon color="#f97316" size={20} />
@@ -227,6 +290,18 @@ export default function CreatePostScreen({ navigation }: any) {
                 <Camera color="#f97316" size={20} />
                 <Text style={styles.mediaBtnText}>كاميرا</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={[styles.mediaBtn, { borderColor: '#a855f7' }]} onPress={pickVideo}>
+                <VideoIcon color="#a855f7" size={20} />
+                <Text style={[styles.mediaBtnText, { color: '#a855f7' }]}>فيديو</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          {/* Video upload progress */}
+          {videoUploading ? (
+            <View style={styles.progressBox}>
+              <ActivityIndicator color="#a855f7" size="small" />
+              <Text style={[styles.progressText, { color: '#a855f7' }]}>جارٍ رفع الفيديو... {uploadProgress}%</Text>
             </View>
           ) : null}
 
@@ -427,6 +502,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   mediaBtnText: { color: '#f97316', fontSize: 12, fontWeight: '700' },
+  // Video preview
+  videoPreviewWrap: { position: 'relative', marginBottom: 12, borderRadius: 12, overflow: 'hidden' },
+  videoPreview: { width: '100%', height: 200, backgroundColor: '#000' },
+  removeVideoBtn: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(239,68,68,0.9)', alignItems: 'center', justifyContent: 'center' },
+  videoLabel: { position: 'absolute', bottom: 8, left: 8, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(168,85,247,0.9)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  videoLabelText: { color: '#fff', fontSize: 10, fontWeight: '800' },
   // Price + Location
   row: { flexDirection: 'row', marginBottom: 12 },
   label: { color: '#94a3b8', fontSize: 12, fontWeight: '700', marginBottom: 6 },

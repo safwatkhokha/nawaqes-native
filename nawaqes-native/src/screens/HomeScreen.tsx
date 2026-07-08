@@ -9,12 +9,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
-import { Home, Plus, Heart, MessageCircle, Share2, Search, Bell } from 'lucide-react-native';
+import { Home, Plus, Heart, MessageCircle, Share2, Search, Bell, Bookmark, BadgeCheck, MapPin, Play } from 'lucide-react-native';
+
 
 interface Post {
   id: string;
   content: string;
   image?: string;
+  images?: string[];
+  video_url?: string;
   type: string;
   price?: number;
   currency?: string;
@@ -37,6 +40,22 @@ export default function HomeScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
+
+  const fixUrl = (u?: string) => u ? (u.startsWith('http') ? u : `https://safwatkhokha-nawaqes.hf.space${u}`) : undefined;
+
+  // Parse images: backend may return JSON array string or single URL
+  const parseImages = (img?: string): string[] => {
+    if (!img) return [];
+    try {
+      const parsed = JSON.parse(img);
+      if (Array.isArray(parsed)) return parsed.map((u: string) => fixUrl(u) || '');
+      return [fixUrl(img) || ''];
+    } catch {
+      return [fixUrl(img) || ''];
+    }
+  };
 
   const loadPosts = useCallback(async (pageNum = 1, refresh = false) => {
     try {
@@ -44,7 +63,14 @@ export default function HomeScreen({ navigation }: any) {
       else if (pageNum === 1) setLoading(true);
 
       const data = await api.getFeed(pageNum, 10);
-      const newPosts = data.posts || data || [];
+      const rawPosts = data.posts || data || [];
+      // Normalize posts: parse image JSON, add images array + video_url
+      const newPosts = rawPosts.map((p: any) => ({
+        ...p,
+        images: parseImages(p.image),
+        video_url: p.video_url ? fixUrl(p.video_url) : undefined,
+        image: p.image ? fixUrl(p.image.startsWith('[') ? parseImages(p.image)[0] : p.image) : undefined,
+      }));
 
       if (refresh || pageNum === 1) {
         setPosts(newPosts);
@@ -54,8 +80,8 @@ export default function HomeScreen({ navigation }: any) {
 
       setHasMore(newPosts.length >= 10);
       setPage(pageNum);
-    } catch (err: any) {
-      Alert.alert('خطأ', 'فشل تحميل المنشورات');
+    } catch {
+      // silent
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -94,28 +120,32 @@ export default function HomeScreen({ navigation }: any) {
     return `${diffDays} يوم`;
   };
 
-  const renderPost = ({ item }: { item: Post }) => (
-    <TouchableOpacity
-      activeOpacity={0.9}
-      onPress={() => navigation?.navigate?.('PostDetail', { postId: item.id })}
-      style={styles.postCard}
-    >
+  const renderPost = ({ item }: { item: Post }) => {
+    const isLiked = likedPosts.has(item.id);
+    const isSaved = savedPosts.has(item.id);
+    const images = item.images && item.images.length > 0 ? item.images : (item.image ? [fixUrl(item.image)] : []);
+    return (
+    <View style={styles.postCard}>
       {/* Author */}
       <View style={styles.postHeader}>
         <Image
-          source={{ uri: item.author?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.author?.id}` }}
+          source={{ uri: fixUrl(item.author?.avatar) || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.author?.id}` }}
           style={styles.avatar}
         />
         <View style={styles.authorInfo}>
-          <Text style={styles.authorName}>
-            {item.author?.name || 'مستخدم'}
-            {item.author?.is_verified ? ' ✓' : ''}
-          </Text>
+          <View style={styles.authorNameRow}>
+            <Text style={styles.authorName}>{item.author?.name || 'مستخدم'}</Text>
+            {item.author?.is_verified ? <BadgeCheck color="#3b82f6" size={14} /> : null}
+          </View>
           <Text style={styles.postTime}>{formatTime(item.created_at)}</Text>
         </View>
         {item.type === 'ad' && item.price ? (
           <View style={styles.priceBadge}>
             <Text style={styles.priceText}>{item.price} {item.currency || 'ج.م'}</Text>
+          </View>
+        ) : item.type === 'ad' ? (
+          <View style={styles.adBadge}>
+            <Text style={styles.adBadgeText}>إعلان</Text>
           </View>
         ) : null}
       </View>
@@ -125,36 +155,87 @@ export default function HomeScreen({ navigation }: any) {
         <Text style={styles.postContent}>{item.content}</Text>
       ) : null}
 
-      {/* Image */}
-      {item.image ? (
-        <Image
-          source={{ uri: item.image.startsWith('http') ? item.image : `https://safwatkhokha-nawaqes.hf.space${item.image}` }}
-          style={styles.postImage}
-          resizeMode="cover"
-        />
+      {/* Video */}
+      {item.video_url ? (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => navigation?.navigate?.('PostDetail', { postId: item.id })}
+        >
+          <Image
+            source={{ uri: images[0] || item.video_url }}
+            style={styles.postVideo}
+            resizeMode="cover"
+          />
+          <View style={styles.videoPlayOverlay}>
+            <View style={styles.videoPlayBtn}>
+              <Play color="#fff" size={28} fill="#fff" />
+            </View>
+          </View>
+        </TouchableOpacity>
+      ) : null}
+
+      {/* Images (multiple) */}
+      {images.length > 0 && !item.video_url ? (
+        <View>
+          <Image
+            source={{ uri: images[0] }}
+            style={styles.postImage}
+            resizeMode="cover"
+          />
+          {images.length > 1 ? (
+            <View style={styles.imageCountBadge}>
+              <Text style={styles.imageCountText}>+{images.length - 1} صور</Text>
+            </View>
+          ) : null}
+        </View>
       ) : null}
 
       {/* Location */}
       {item.location ? (
-        <Text style={styles.locationText}>📍 {item.location}</Text>
+        <View style={styles.locationRow}>
+          <MapPin color="#64748b" size={12} />
+          <Text style={styles.locationText}>{item.location}</Text>
+        </View>
       ) : null}
 
       {/* Actions */}
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionButton} onPress={() => handleLike(item.id)}>
-          <Heart color="#ef4444" size={20} />
-          <Text style={styles.actionText}>{item.likes}</Text>
+          <Heart color={isLiked ? '#ef4444' : '#64748b'} size={20} fill={isLiked ? '#ef4444' : 'transparent'} />
+          <Text style={[styles.actionText, isLiked && { color: '#ef4444' }]}>{item.likes}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation?.navigate?.('PostDetail', { postId: item.id })}
+        >
           <MessageCircle color="#64748b" size={20} />
           <Text style={styles.actionText}>{item.comments}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => {
+            setSavedPosts(prev => { const next = new Set(prev); if (next.has(item.id)) next.delete(item.id); else next.add(item.id); return next; });
+            try { api.savePost(item.id).catch(() => {}); } catch {}
+          }}
+        >
+          <Bookmark color={isSaved ? '#facc15' : '#64748b'} size={20} fill={isSaved ? '#facc15' : 'transparent'} />
+          <Text style={styles.actionText}>{isSaved ? 'محفوظ' : 'حفظ'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={async () => {
+            try {
+              const Share = require('react-native').Share;
+              await Share.share({ message: `${item.content || 'منشور'}\nhttps://safwatkhokha-nawaqes.hf.space/post/${item.id}` });
+            } catch {}
+          }}
+        >
           <Share2 color="#64748b" size={20} />
         </TouchableOpacity>
       </View>
-    </TouchableOpacity>
-  );
+    </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -305,14 +386,40 @@ const styles = StyleSheet.create({
   },
   postImage: {
     width: '100%',
-    height: 250,
+    height: 280,
     backgroundColor: '#0f172a',
   },
+  postVideo: {
+    width: '100%',
+    height: 280,
+    backgroundColor: '#000',
+  },
+  videoPlayOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+  },
+  videoPlayBtn: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: 'rgba(249,115,22,0.9)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  imageCountBadge: {
+    position: 'absolute', top: 8, right: 8,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+  },
+  imageCountText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  adBadge: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+  },
+  adBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  authorNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingTop: 8 },
   locationText: {
     color: '#64748b',
     fontSize: 12,
-    paddingHorizontal: 12,
-    paddingTop: 8,
   },
   actions: {
     flexDirection: 'row',
