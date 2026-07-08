@@ -151,8 +151,8 @@ export default function ProfileScreen({ navigation }: any) {
     { icon: ShoppingBag, label: 'سوقي', color: '#3b82f6', onPress: () => navigation?.navigate?.('SmartMarket') },
     { icon: Bell, label: 'الإشعارات', color: '#a855f7', onPress: () => navigation?.navigate?.('Notifications') },
     { icon: Settings, label: 'الإعدادات', color: '#06b6d4', onPress: () => navigation?.navigate?.('Settings') },
-    { icon: Shield, label: 'الخصوصية والأمان', color: '#10b981', onPress: () => Alert.alert('قريباً') },
-    { icon: HelpCircle, label: 'المساعدة', color: '#06b6d4', onPress: () => Alert.alert('قريباً') },
+    { icon: Shield, label: 'الخصوصية والأمان', color: '#10b981', onPress: () => navigation?.navigate?.('PrivacySecurity') },
+    { icon: HelpCircle, label: 'المساعدة', color: '#06b6d4', onPress: () => navigation?.navigate?.('Help') },
   ];
 
   if (user?.is_admin) {
@@ -175,9 +175,6 @@ export default function ProfileScreen({ navigation }: any) {
           <View style={styles.coverHeader}>
             <TouchableOpacity onPress={handleShare} style={styles.coverBtn}>
               <Share2 color="#fff" size={20} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation?.navigate?.('Settings')} style={styles.coverBtn}>
-              <Settings color="#fff" size={20} />
             </TouchableOpacity>
           </View>
           {/* Avatar */}

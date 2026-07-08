@@ -22,6 +22,8 @@ interface User {
   followers_count?: number;
   following_count?: number;
   join_date?: string;
+  show_phone?: boolean;
+  show_location?: boolean;
 }
 
 interface AuthContextType {

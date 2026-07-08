@@ -24,6 +24,8 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import SmartMarketScreen from '../screens/SmartMarketScreen';
+import PrivacySecurityScreen from '../screens/PrivacySecurityScreen';
+import HelpScreen from '../screens/HelpScreen';
 
 // ─── Bottom Tabs ────────────────────────────────────────────────────
 const Tab = createBottomTabNavigator();
@@ -129,6 +131,8 @@ export default function AppNavigator() {
             <Stack.Screen name="Search" component={SearchScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
+            <Stack.Screen name="Help" component={HelpScreen} />
             {user?.is_admin ? (
               <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
             ) : null}
