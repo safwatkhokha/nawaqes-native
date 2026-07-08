@@ -1,12 +1,12 @@
 // ─── Navigation Setup ───────────────────────────────────────────────
 // React Navigation with auth flow + bottom tabs + stack screens.
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../contexts/AuthContext';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Text } from 'react-native';
 import { Home, Wallet, User, Plus, MessageCircle, Search, Bell, ShoppingBag, Video } from 'lucide-react-native';
 
 import LoginScreen from '../screens/LoginScreen';
@@ -105,18 +105,33 @@ const Stack = createNativeStackNavigator();
 export default function AppNavigator() {
   const { isAuthenticated, isLoading, user } = useAuth();
 
-  if (isLoading) {
+  // 🔧 5s safety timeout: if isLoading stays true, force-show login
+  const [forceLogin, setForceLogin] = useState(false);
+  useEffect(() => {
+    if (!isLoading) return;
+    const t = setTimeout(() => setForceLogin(true), 5000);
+    return () => clearTimeout(t);
+  }, [isLoading]);
+
+  if (isLoading && !forceLogin) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#f97316" />
+        <View style={styles.logoCircle}>
+          <Text style={styles.logoText}>N</Text>
+        </View>
+        <Text style={styles.loadingText}>نواقص</Text>
+        <ActivityIndicator size="large" color="#f97316" style={{ marginTop: 20 }} />
+        <Text style={styles.loadingSubtext}>جارٍ التحميل...</Text>
       </View>
     );
   }
 
+  const showAuth = isAuthenticated && !forceLogin;
+
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {isAuthenticated ? (
+        {showAuth ? (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen
@@ -159,4 +174,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  logoCircle: {
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: '#f97316',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 16,
+  },
+  logoText: { color: '#fff', fontSize: 56, fontWeight: '900' },
+  loadingText: { color: '#fff', fontSize: 28, fontWeight: '900' },
+  loadingSubtext: { color: '#94a3b8', fontSize: 13, marginTop: 8 },
 });
