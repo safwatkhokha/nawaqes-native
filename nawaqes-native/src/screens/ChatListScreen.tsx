@@ -1,14 +1,19 @@
-// ─── Chat List Screen ───────────────────────────────────────────────
-// List of conversations + search.
+// ─── Chat List Screen (Enhanced) ────────────────────────────────────
+// Conversations list with: search, online status, unread badges,
+// last message preview, time, avatar with online dot, new chat button.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, RefreshControl, StyleSheet,
-  TouchableOpacity, Image, TextInput, Alert,
+  TouchableOpacity, Image, TextInput, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../services/api';
-import { Search, MessageCircle, Plus, Send } from 'lucide-react-native';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  Search, MessageCircle, Plus, Send, BadgeCheck,
+  Users, Circle, ChevronLeft,
+} from 'lucide-react-native';
 
 interface Conversation {
   id: string;
@@ -18,13 +23,19 @@ interface Conversation {
   lastTime?: string;
   unreadCount?: number;
   isOnline?: boolean;
+  is_verified?: boolean;
 }
 
 export default function ChatListScreen({ navigation }: any) {
+  const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [filtered, setFiltered] = useState<Conversation[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+
+  const fixUrl = (u?: string) => u ? (u.startsWith('http') ? u : `https://safwatkhokha-nawaqes.hf.space${u}`) : undefined;
 
   const loadConversations = useCallback(async (refresh = false) => {
     try {
@@ -32,17 +43,21 @@ export default function ChatListScreen({ navigation }: any) {
       else setLoading(true);
       const res = await api.client.get('/chat/contacts');
       const data = res.data || [];
-      setConversations(data.map((c: any) => ({
+      const mapped = data.map((c: any) => ({
         id: c.id,
         name: c.name || 'مستخدم',
-        avatar: c.avatar,
-        lastMessage: c.lastMessage || c.last_message,
-        lastTime: c.lastTime || c.last_time,
+        avatar: fixUrl(c.avatar),
+        lastMessage: c.lastMessage || c.last_message || '',
+        lastTime: c.lastTime || c.last_time || '',
         unreadCount: c.unreadCount || c.unread_count || 0,
-        isOnline: c.isOnline || c.is_online,
-      })));
+        isOnline: c.isOnline || c.is_online || false,
+        is_verified: c.is_verified || false,
+      }));
+      setConversations(mapped);
+      setFiltered(mapped);
     } catch {
-      // silent
+      setConversations([]);
+      setFiltered([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -51,15 +66,25 @@ export default function ChatListScreen({ navigation }: any) {
 
   useEffect(() => {
     loadConversations();
-    const interval = setInterval(() => loadConversations(true), 30000);
+    // Poll for new messages every 15s
+    const interval = setInterval(() => loadConversations(true), 15000);
     return () => clearInterval(interval);
   }, [loadConversations]);
 
-  const filtered = conversations.filter(c =>
-    !search || c.name.toLowerCase().includes(search.toLowerCase())
-  );
+  // Filter by search
+  useEffect(() => {
+    if (!search.trim()) {
+      setFiltered(conversations);
+      return;
+    }
+    const q = search.toLowerCase().trim();
+    setFiltered(conversations.filter(c =>
+      c.name?.toLowerCase().includes(q) ||
+      c.lastMessage?.toLowerCase().includes(q)
+    ));
+  }, [search, conversations]);
 
-  const formatTime = (iso?: string) => {
+  const formatTime = (iso: string) => {
     if (!iso) return '';
     const d = new Date(iso);
     const now = new Date();
@@ -71,16 +96,28 @@ export default function ChatListScreen({ navigation }: any) {
     if (diffMins < 60) return `${diffMins} د`;
     if (diffHours < 24) return d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
     if (diffDays === 1) return 'أمس';
-    return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'numeric' });
+    if (diffDays < 7) return `${diffDays} يوم`;
+    return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short' });
+  };
+
+  const totalUnread = conversations.reduce((s, c) => s + (c.unreadCount || 0), 0);
+
+  const openConversation = (conv: Conversation) => {
+    navigation?.navigate?.('ChatConversation', {
+      contactId: conv.id,
+      contactName: conv.name,
+      contactAvatar: conv.avatar,
+    });
   };
 
   const renderConversation = ({ item }: { item: Conversation }) => (
     <TouchableOpacity
       style={styles.convCard}
-      onPress={() => navigation?.navigate?.('ChatConversation', { contactId: item.id, contactName: item.name, contactAvatar: item.avatar })}
+      onPress={() => openConversation(item)}
+      activeOpacity={0.7}
     >
-      {/* Avatar */}
-      <View style={styles.avatarContainer}>
+      {/* Avatar with online dot */}
+      <View style={styles.avatarWrap}>
         <Image
           source={{ uri: item.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${item.id}` }}
           style={styles.avatar}
@@ -88,19 +125,27 @@ export default function ChatListScreen({ navigation }: any) {
         {item.isOnline ? <View style={styles.onlineDot} /> : null}
       </View>
 
-      {/* Info */}
-      <View style={styles.convInfo}>
-        <View style={styles.convHeader}>
-          <Text style={styles.convName} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.convTime}>{formatTime(item.lastTime)}</Text>
-        </View>
-        <View style={styles.convFooter}>
-          <Text style={styles.convLastMsg} numberOfLines={1}>
-            {item.lastMessage || 'ابدأ المحادثة'}
+      {/* Content */}
+      <View style={styles.convContent}>
+        <View style={styles.convTopRow}>
+          <View style={styles.convNameRow}>
+            <Text style={styles.convName} numberOfLines={1}>{item.name}</Text>
+            {item.is_verified ? <BadgeCheck color="#3b82f6" size={14} /> : null}
+          </View>
+          <Text style={[styles.convTime, (item.unreadCount || 0) > 0 && styles.convTimeUnread]}>
+            {formatTime(item.lastTime || '')}
           </Text>
-          {item.unreadCount ? (
+        </View>
+        <View style={styles.convBottomRow}>
+          <Text
+            style={[styles.convLastMsg, (item.unreadCount || 0) > 0 && styles.convLastMsgUnread]}
+            numberOfLines={1}
+          >
+            {item.lastMessage || 'لا توجد رسائل بعد'}
+          </Text>
+          {(item.unreadCount || 0) > 0 ? (
             <View style={styles.unreadBadge}>
-              <Text style={styles.unreadText}>{item.unreadCount}</Text>
+              <Text style={styles.unreadText}>{item.unreadCount! > 99 ? '99+' : item.unreadCount}</Text>
             </View>
           ) : null}
         </View>
@@ -112,120 +157,158 @@ export default function ChatListScreen({ navigation }: any) {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>الرسائل</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>الرسائل</Text>
+          {totalUnread > 0 ? (
+            <View style={styles.headerBadge}>
+              <Text style={styles.headerBadgeText}>{totalUnread > 99 ? '99+' : totalUnread}</Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => setShowSearch(s => !s)} style={styles.iconBtn}>
+            <Search color="#fff" size={20} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.newChatBtn}
+            onPress={() => navigation?.navigate?.('Search')}
+          >
+            <Plus color="#fff" size={20} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Search */}
-      <View style={styles.searchBox}>
-        <Search color="#64748b" size={18} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="ابحث في المحادثات..."
-          placeholderTextColor="#64748b"
-          value={search}
-          onChangeText={setSearch}
+      {/* Search bar (collapsible) */}
+      {showSearch && (
+        <View style={styles.searchBar}>
+          <Search color="#64748b" size={16} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="ابحث عن محادثة..."
+            placeholderTextColor="#64748b"
+            value={search}
+            onChangeText={setSearch}
+            autoFocus
+          />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Text style={styles.clearBtn}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      )}
+
+      {/* Conversations list */}
+      {loading ? (
+        <View style={styles.loadingState}>
+          <ActivityIndicator color="#f97316" size="large" />
+        </View>
+      ) : filtered.length > 0 ? (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          renderItem={renderConversation}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => loadConversations(true)}
+              tintColor="#f97316"
+            />
+          }
+          contentContainerStyle={{ padding: 12, gap: 6 }}
+          showsVerticalScrollIndicator={false}
         />
-      </View>
-
-      {/* List */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        renderItem={renderConversation}
-        contentContainerStyle={{ padding: 12, gap: 8 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={() => loadConversations(true)} tintColor="#f97316" />
-        }
-        ListEmptyComponent={
-          loading ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>جارٍ التحميل...</Text>
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIcon}>
-                <MessageCircle color="#475569" size={32} />
-              </View>
-              <Text style={styles.emptyTitle}>لا توجد محادثات</Text>
-              <Text style={styles.emptySub}>ابدأ محادثة جديدة من صفحة منشور</Text>
-            </View>
-          )
-        }
-      />
+      ) : (
+        <View style={styles.emptyState}>
+          <View style={styles.emptyIcon}>
+            <MessageCircle color="#475569" size={48} />
+          </View>
+          <Text style={styles.emptyTitle}>
+            {search ? 'لا توجد نتائج' : 'لا توجد محادثات'}
+          </Text>
+          <Text style={styles.emptySub}>
+            {search ? 'جرّب كلمات بحث أخرى' : 'ابدأ محادثة جديدة مع أي مستخدم'}
+          </Text>
+          {!search ? (
+            <TouchableOpacity
+              style={styles.emptyBtn}
+              onPress={() => navigation?.navigate?.('Search')}
+            >
+              <Plus color="#fff" size={18} />
+              <Text style={styles.emptyBtnText}>محادثة جديدة</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
+  // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#1e293b',
-    borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: '#1e293b', borderBottomWidth: 1, borderBottomColor: '#334155',
   },
-  headerTitle: { color: '#fff', fontSize: 20, fontWeight: '900' },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e293b',
-    margin: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-    height: 44,
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerTitle: { fontSize: 22, fontWeight: '900', color: '#fff' },
+  headerBadge: {
+    backgroundColor: '#f97316', minWidth: 22, height: 22, borderRadius: 11,
+    paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center',
   },
-  searchIcon: { marginRight: 10 },
+  headerBadgeText: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#0f172a', alignItems: 'center', justifyContent: 'center' },
+  newChatBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f97316', alignItems: 'center', justifyContent: 'center' },
+  // Search
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#1e293b', margin: 12, paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12, borderWidth: 1, borderColor: '#334155',
+  },
   searchInput: { flex: 1, color: '#fff', fontSize: 14, paddingVertical: 0 },
+  clearBtn: { color: '#64748b', fontSize: 16 },
+  // Loading
+  loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // Conversation card
   convCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1e293b',
-    borderRadius: 14,
-    padding: 12,
-    gap: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#1e293b', borderRadius: 14, padding: 12,
   },
-  avatarContainer: { position: 'relative' },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#334155' },
+  avatarWrap: { position: 'relative' },
+  avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#334155' },
   onlineDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#10b981',
-    borderWidth: 2,
-    borderColor: '#1e293b',
+    position: 'absolute', bottom: 2, right: 2,
+    width: 14, height: 14, borderRadius: 7, backgroundColor: '#22c55e',
+    borderWidth: 3, borderColor: '#1e293b',
   },
-  convInfo: { flex: 1 },
-  convHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  convName: { color: '#fff', fontSize: 14, fontWeight: '700', flex: 1 },
+  convContent: { flex: 1, minWidth: 0 },
+  convTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  convNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 },
+  convName: { color: '#fff', fontSize: 14, fontWeight: '700' },
   convTime: { color: '#64748b', fontSize: 11 },
-  convFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
-  convLastMsg: { color: '#94a3b8', fontSize: 12, flex: 1 },
+  convTimeUnread: { color: '#f97316', fontWeight: '700' },
+  convBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  convLastMsg: { color: '#64748b', fontSize: 12, flex: 1 },
+  convLastMsgUnread: { color: '#e2e8f0', fontWeight: '600' },
   unreadBadge: {
-    backgroundColor: '#f97316',
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#f97316', minWidth: 20, height: 20, borderRadius: 10,
+    paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', marginLeft: 8,
   },
   unreadText: { color: '#fff', fontSize: 10, fontWeight: '900' },
-  emptyState: { padding: 40, alignItems: 'center' },
+  // Empty
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   emptyIcon: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#1e293b', alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12,
+    width: 96, height: 96, borderRadius: 48, backgroundColor: '#1e293b',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
   },
-  emptyTitle: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  emptySub: { color: '#64748b', fontSize: 12, marginTop: 4, textAlign: 'center' },
-  emptyText: { color: '#64748b', fontSize: 14 },
+  emptyTitle: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 6 },
+  emptySub: { color: '#64748b', fontSize: 13, textAlign: 'center', marginBottom: 20 },
+  emptyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#f97316', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12,
+  },
+  emptyBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });
