@@ -1,11 +1,6 @@
 // ─── Channels Page (TikTok-style vertical feed) ──────────────────────
 // Full-screen live streams + recorded videos in a vertical scrolling feed.
-// Right-side action bar (avatar+follow, like, comment, save, gift, share).
-// Bottom host info card (avatar, name, verified, followers, follow + msg).
-// Top LIVE badge + search.
-//
-// 🔧 Backend is being rebuilt — this UI gracefully handles empty state
-//    and will start working once /api/channels/feed is implemented.
+// ✅ Backend wired: /api/streams/* (feed, like, save, share, gift, chat, follow)
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +13,7 @@ import { useAppContext } from '../contexts/AppContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { api } from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────
 interface StreamItem {
@@ -98,11 +94,8 @@ export const ChannelsPage: React.FC = () => {
   const loadFeed = useCallback(async () => {
     setLoading(true);
     try {
-      // 🔧 TODO: replace with real backend once it's rebuilt
-      // const res = await fetch('/api/channels/feed');
-      // const data = await res.json();
-      // setStreams(data.streams || []);
-      setStreams(MOCK_STREAMS);
+      const data = await api.getStreamsFeed();
+      setStreams(data.streams || []);
     } catch {
       setStreams([]);
     } finally {
@@ -112,11 +105,18 @@ export const ChannelsPage: React.FC = () => {
 
   useEffect(() => { loadFeed(); }, [loadFeed]);
 
+  // Auto-refresh feed every 30s
+  useEffect(() => {
+    const interval = setInterval(() => loadFeed(), 30000);
+    return () => clearInterval(interval);
+  }, [loadFeed]);
+
   // Fetch wallet balance for gift modal
   useEffect(() => {
     if (showGiftModal) {
-      // 🔧 TODO: api.getWalletBalance()
-      setWalletBalance(0);
+      api.getWalletBalance()
+        .then((w: any) => setWalletBalance(typeof w?.balance === 'number' ? w.balance : 0))
+        .catch(() => setWalletBalance(0));
     }
   }, [showGiftModal]);
 

@@ -229,7 +229,7 @@ export const LoginPage: React.FC = () => {
     () => registerConfirm.length > 0 && registerPassword === registerConfirm,
     [registerPassword, registerConfirm]
   );
-  const rDobValid = useMemo(() => !!registerDateOfBirth, [registerDateOfBirth]);
+  const rDobValid = useMemo(() => true, []); // dateOfBirth is now optional
   const rInterestsValid = useMemo(() => selectedInterests.length > 0, [selectedInterests]);
   const [termsAgreed, setTermsAgreed] = useState(false);
 

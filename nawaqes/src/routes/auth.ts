@@ -109,21 +109,20 @@ router.post('/register', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'رقم الهاتف مطلوب ويجب أن يكون 11 رقماً على الأقل' });
       return;
     }
-    if (!dateOfBirth) {
-      res.status(400).json({ error: 'تاريخ الميلاد مطلوب' });
-      return;
-    }
-    // Validate age (must be at least 13 years old)
-    const birthDate = new Date(dateOfBirth);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    if (age < 13 || age > 120) {
-      res.status(400).json({ error: 'يجب أن يكون عمرك 13 سنة على الأقل' });
-      return;
+    // dateOfBirth is OPTIONAL — don't block registration if missing
+    if (dateOfBirth) {
+      // Validate age (must be at least 13 years old)
+      const birthDate = new Date(dateOfBirth);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      if (age < 13 || age > 120) {
+        res.status(400).json({ error: 'يجب أن يكون عمرك 13 سنة على الأقل' });
+        return;
+      }
     }
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -131,8 +130,8 @@ router.post('/register', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'صيغة البريد الإلكتروني غير صحيحة' });
       return;
     }
-    if (password.length < 8 || !/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
-      res.status(400).json({ error: 'كلمة المرور يجب أن تكون 8 أحرف على الأقل وتحتوي على حرف كبير وحرف صغير ورقم' });
+    if (password.length < 6) {
+      res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
       return;
     }
     if (name.trim().length < 2) {
