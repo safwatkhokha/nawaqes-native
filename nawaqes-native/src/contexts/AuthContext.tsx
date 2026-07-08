@@ -32,7 +32,7 @@ interface AuthContextType {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { name: string; email: string; password: string; phone: string; gender?: string }) => Promise<void>;
+  register: (data: { name: string; email: string; password: string; phone: string; gender?: string; dateOfBirth?: string }) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }

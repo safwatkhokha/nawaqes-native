@@ -80,7 +80,7 @@ export default function ChatConversationScreen({ route, navigation }: any) {
     setText('');
     setSending(true);
     try {
-      const res = await api.client.post(`/chat/messages/${contactId}`, { text: msgText });
+      const res = await api.client.post('/chat/send', { receiverId: contactId, text: msgText });
       setMessages(prev => [...prev, {
         id: res.data?.id || Date.now().toString(),
         text: msgText,

@@ -73,6 +73,27 @@ function getBlockedUserIds(userId: string): { blockedByMe: Set<string>; blockedM
   };
 }
 
+// POST /api/chat/start — start a chat with a user (returns their contact info)
+router.post('/start', authMiddleware, (req: Request, res: Response) => {
+  try {
+    const payload = (req as any).user as JwtPayload;
+    const { userId } = req.body;
+    if (!userId) { res.status(400).json({ error: 'userId مطلوب' }); return; }
+    
+    const targetUser = db.prepare('SELECT id, name, avatar, avatar_base64, is_verified FROM users WHERE id = ?').get(userId) as any;
+    if (!targetUser) { res.status(404).json({ error: 'المستخدم غير موجود' }); return; }
+    
+    res.json({
+      id: userId,
+      name: targetUser.name,
+      avatar: targetUser.avatar_base64 || targetUser.avatar,
+      is_verified: !!targetUser.is_verified,
+    });
+  } catch {
+    res.status(500).json({ error: 'فشل' });
+  }
+});
+
 // GET /api/chat/contacts
 router.get('/contacts', authMiddleware, (req: Request, res: Response) => {
   try {

@@ -190,9 +190,11 @@ export default function ChannelsScreen({ navigation }: any) {
   const handleMessage = async () => {
     if (!currentStream) return;
     try {
-      const res = await api.client.post('/chat/start', { userId: currentStream.hostId });
-      const chatId = res.data?.id || res.data?.chatId;
-      if (chatId) navigation?.navigate?.('ChatConversation', { chatId });
+      navigation?.navigate?.('ChatConversation', {
+        contactId: currentStream.hostId,
+        contactName: currentStream.hostName,
+        contactAvatar: fixUrl(currentStream.hostAvatar),
+      });
     } catch {}
   };
 
@@ -664,7 +666,7 @@ const styles = StyleSheet.create({
   emptySub: { color: '#94a3b8', fontSize: 14, marginBottom: 32, textAlign: 'center' },
   startBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#a855f7', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 16 },
   startBtnText: { color: '#fff', fontSize: 15, fontWeight: '900' },
-  goLiveBtn: { position: 'absolute', bottom: 30, right: 16, zIndex: 100, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ef4444', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 24, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
+  goLiveBtn: { position: 'absolute', top: 100, right: 16, zIndex: 100, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ef4444', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
   goLiveBtnText: { color: '#fff', fontSize: 13, fontWeight: '900' },
   loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // Broadcast mode

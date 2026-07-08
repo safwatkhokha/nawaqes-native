@@ -91,7 +91,7 @@ export const api = {
     return res.data;
   },
 
-  async register(data: { name: string; email: string; password: string; phone: string; gender?: string }) {
+  async register(data: { name: string; email: string; password: string; phone: string; gender?: string; dateOfBirth?: string }) {
     const res = await apiClient.post('/auth/register', data);
     if (res.data.token) await storeToken(res.data.token);
     if (res.data.user) await storeUser(res.data.user);
@@ -241,7 +241,8 @@ export const api = {
 
   async getTransactions() {
     const res = await apiClient.get('/wallet/transactions');
-    return res.data;
+    // Backend returns { transactions: [...], total, limit, offset }
+    return res.data?.transactions || res.data || [];
   },
 
   // ─── File uploads ─────────────────────────────────────────────────

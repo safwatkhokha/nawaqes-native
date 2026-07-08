@@ -126,15 +126,19 @@ export default function SmartMarketScreen({ navigation }: any) {
   };
 
   const handleContactSeller = async (listing: Listing) => {
+    const sellerId = listing.author?.id || (listing as any).author_id;
+    if (!sellerId) {
+      Alert.alert('خطأ', 'تعذر تحديد هوية البائع');
+      return;
+    }
     try {
-      const res = await api.client.post('/chat/start', { userId: listing.author.id });
-      const chatId = res.data?.id || res.data?.chatId;
-      if (chatId) {
-        navigation?.navigate?.('ChatConversation', { chatId });
-      } else {
-        navigation?.navigate?.('ChatList');
-      }
-    } catch {
+      // Navigate directly to chat with seller's user ID as contactId
+      navigation?.navigate?.('ChatConversation', {
+        contactId: sellerId,
+        contactName: listing.author?.name || 'بائع',
+        contactAvatar: fixUrl(listing.author?.avatar),
+      });
+    } catch (e: any) {
       Alert.alert('خطأ', 'تعذر فتح المحادثة');
     }
   };

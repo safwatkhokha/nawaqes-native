@@ -50,6 +50,7 @@ export default function RegisterScreen({ navigation }: any) {
         password,
         phone: phone.trim(),
         gender,
+        dateOfBirth: '2000-01-01',
       });
     } catch (err: any) {
       const msg = err?.response?.data?.error || 'فشل التسجيل';
