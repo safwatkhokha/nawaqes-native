@@ -1,0 +1,91 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment variables (NEVER commit these)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# Keep .env.example (template with placeholder values only)
+
+# Firebase service account keys (NEVER commit)
+nawaqes-firebase-admin.json
+*-firebase-adminsdk-*.json
+firebase-admin*.json
+google-services.json
+GoogleService-Info.plist
+
+# Secrets / credentials
+*.keystore
+*.jks
+debug.keystore
+release.keystore
+keystore.properties
+
+# Database files
+data/*.db
+data/*.db-*
+data/*.db-wal
+data/*.db-shm
+*.sqlite
+*.sqlite3
+
+# User uploads
+uploads/
+backups/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temp files
+*.tmp
+*.bak
+*.zip
+*.tar.gz
+*.rar
+
+# Secrets / backup documentation
+README-SECRETS.md
+SECRETS.md
+
+# Capacitor / Android build output
+android/app/build/
+android/.gradle/
+android/local.properties
+android/captures/
+
+# Vite cache
+.vite/
+
+# TypeScript cache
+*.tsbuildinfo
+public/download/*.apk
+downloads/*.apk

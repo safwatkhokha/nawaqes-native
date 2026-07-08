@@ -1,0 +1,75 @@
+{
+  "name": "نواقص | Nawaqes - منصة الإعلانات الذكية",
+  "short_name": "نواقص",
+  "description": "منصة إعلانات ذكية متكاملة مع مساعد ذكاء اصطناعي، محفظة إلكترونية، وسوق إلكتروني",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#1e0c0c",
+  "theme_color": "#DC2626",
+  "categories": ["business", "shopping", "social"],
+  "id": "/?source=pwa",
+  "icons": [
+    {
+      "src": "/icons/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icons/screenshot-mobile.png",
+      "type": "image/png",
+      "sizes": "390x844",
+      "form_factor": "narrow",
+      "label": "نواقص على الجوال"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "السوق",
+      "short_name": "السوق",
+      "description": "تصفح السوق الإلكتروني",
+      "url": "/?source=pwa&page=market",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "الرسائل",
+      "short_name": "الرسائل",
+      "description": "عرض الرسائل والمحادثات",
+      "url": "/?source=pwa&page=messages",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "المحفظة",
+      "short_name": "المحفظة",
+      "description": "إدارة الرصيد والمحفظة الإلكترونية",
+      "url": "/?source=pwa&page=wallet",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": []
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">نواقص</string>
+    <string name="app_name_en">Nawaqes</string>
+    <string name="channel_default">إشعارات عامة</string>
+    <string name="channel_messages">الرسائل</string>
+</resources>

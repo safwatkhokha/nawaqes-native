@@ -1,0 +1,64 @@
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
+
+# Dependencies (installed in Docker image)
+node_modules/
+
+# Environment files (use HF Spaces secrets instead)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Firebase service account (use HF Spaces secret FIREBASE_SERVICE_ACCOUNT path instead)
+server-data/data/firebase-service-account.json
+nawaqes-firebase-admin.json
+*-firebase-adminsdk-*.json
+google-services.json
+GoogleService-Info.plist
+
+# Keystore / signing keys
+*.keystore
+*.jks
+keystore/
+
+# Local DBs and uploads (use /data persistent storage)
+data/*.db
+data/*.db-*
+uploads/
+backups/
+
+# APK source projects (built separately; not needed to run the server)
+apk-source-chat/
+apk-source-main/
+apks/
+nawaqes-apk-docs/
+*.apk
+*.aab
+*.idsig
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Caches
+.cache/
+.vite/
+*.tmp
+
+# Docs (keep README.md only)
+README-SECRETS.md
+SECRETS.md

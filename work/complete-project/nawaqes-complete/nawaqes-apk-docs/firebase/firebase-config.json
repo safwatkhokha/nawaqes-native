@@ -1,0 +1,12 @@
+{
+  "_comment": "Firebase configuration for Nawaqes. Replace placeholder values with your actual Firebase project credentials from https://console.firebase.google.com",
+  "projectId": "nawaqes-app",
+  "appId": "1:123456789012:android:abcdef1234567890abcdef",
+  "apiKey": "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "messagingSenderId": "123456789012",
+  "storageBucket": "nawaqes-app.appspot.com",
+  "authDomain": "nawaqes-app.firebaseapp.com",
+  "measurementId": "G-XXXXXXXXXX",
+  "vapidKey": "BJXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "androidPackage": "com.nawaqes.app"
+}

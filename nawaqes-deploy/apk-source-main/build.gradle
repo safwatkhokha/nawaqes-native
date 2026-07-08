@@ -1,0 +1,20 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.0'
+        // Google Services plugin — needed for Firebase
+        // NOTE: We initialize Firebase programmatically (no google-services.json),
+        // but we still need this plugin to resolve the firebase-messaging dependency.
+        classpath 'com.google.gms:google-services:4.4.2'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

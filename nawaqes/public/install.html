@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#DC2626" />
+  <title>تثبيت تطبيق نواقص | Install Nawaqes</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Tahoma', 'Noto Sans Arabic', sans-serif;
+      background: linear-gradient(135deg, #1e0c0c 0%, #2d1212 50%, #1e0c0c 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 1.5rem;
+      line-height: 1.7;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+    .logo {
+      width: 100px;
+      height: 100px;
+      margin: 0 auto 1.5rem;
+      background: linear-gradient(135deg, #FBC02D 0%, #DC2626 100%);
+      border-radius: 25%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 15px 40px rgba(220,38,38,0.4);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, #FBC02D, #F59E0B);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle {
+      text-align: center;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 2.5rem;
+      font-size: 1.1rem;
+    }
+    .install-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(10px);
+    }
+    .platform-icon {
+      font-size: 3rem;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .platform-title {
+      font-size: 1.4rem;
+      text-align: center;
+      margin-bottom: 0.5rem;
+      color: #FBC02D;
+    }
+    .platform-desc {
+      text-align: center;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 1.5rem;
+    }
+    .install-btn {
+      display: block;
+      width: 100%;
+      padding: 1.1rem;
+      background: linear-gradient(135deg, #DC2626, #B91C1C);
+      color: white;
+      border: none;
+      border-radius: 16px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 10px 30px rgba(220,38,38,0.4);
+      text-decoration: none;
+      text-align: center;
+    }
+    .install-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 15px 40px rgba(220,38,38,0.5);
+    }
+    .install-btn.secondary {
+      background: rgba(255,255,255,0.1);
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+    .install-btn.secondary:hover {
+      background: rgba(255,255,255,0.15);
+    }
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin: 1.5rem 0;
+    }
+    .steps li {
+      counter-increment: step;
+      padding: 0.8rem 2.5rem 0.8rem 0;
+      position: relative;
+      color: rgba(255,255,255,0.85);
+      font-size: 0.95rem;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .steps li:last-child { border-bottom: none; }
+    .steps li::before {
+      content: counter(step);
+      position: absolute;
+      right: 0;
+      top: 0.8rem;
+      width: 26px;
+      height: 26px;
+      background: linear-gradient(135deg, #DC2626, #B91C1C);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: bold;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.3rem 0.8rem;
+      background: linear-gradient(135deg, #F59E0B, #FBC02D);
+      color: #1e0c0c;
+      border-radius: 50px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+    .hidden { display: none !important; }
+    .alert {
+      padding: 1rem;
+      border-radius: 12px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    .alert-info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .alert-success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .footer {
+      text-align: center;
+      margin-top: 2rem;
+      color: rgba(255,255,255,0.5);
+      font-size: 0.85rem;
+    }
+    .footer a {
+      color: #FBC02D;
+      text-decoration: none;
+    }
+    .qr-placeholder {
+      text-align: center;
+      padding: 1rem;
+      background: white;
+      border-radius: 16px;
+      margin: 1rem auto;
+      width: 180px;
+      height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">ن</div>
+    <h1>تثبيت تطبيق نواقص</h1>
+    <p class="subtitle">اختر طريقة التثبيت المناسبة لجهازك</p>
+
+    <!-- Smart install prompt (Android Chrome) -->
+    <div id="installPromptCard" class="install-card hidden">
+      <div class="platform-icon">📲</div>
+      <div class="platform-title">جاهز للتثبيت!</div>
+      <p class="platform-desc">متصفحك يدعم التثبيت المباشر. اضغط الزر أدناه لتثبيت نواقص كتطبيق أصلي.</p>
+      <button class="install-btn" id="installBtn">📱 تثبيت التطبيق الآن</button>
+    </div>
+
+    <!-- iOS Instructions -->
+    <div id="iosCard" class="install-card hidden">
+      <div class="platform-icon">🍎</div>
+      <div class="platform-title">تثبيت على iPhone / iPad</div>
+      <p class="platform-desc">اتبع الخطوات التالية لتثبيت نواقص على جهاز iOS</p>
+      <ol class="steps">
+        <li>افتح موقع نواقص في متصفح <strong>Safari</strong></li>
+        <li>اضغط زر <strong>المشاركة</strong> ⬆️ في أسفل الشاشة</li>
+        <li>اختر <strong>«إضافة إلى الشاشة الرئيسية»</strong></li>
+        <li>اضغط <strong>«إضافة»</strong> في أعلى اليمين</li>
+        <li>ستجد أيقونة نواقص على شاشتك الرئيسية!</li>
+      </ol>
+      <a href="/" class="install-btn secondary">🌐 فتح الموقع في Safari</a>
+    </div>
+
+    <!-- Android Chrome instructions -->
+    <div id="androidCard" class="install-card hidden">
+      <div class="platform-icon">🤖</div>
+      <div class="platform-title">تثبيت على Android</div>
+      <p class="platform-desc">اتبع الخطوات التالية لتثبيت نواقص على جهاز Android</p>
+      <ol class="steps">
+        <li>افتح موقع نواقص في <strong>Chrome</strong></li>
+        <li>اضغط على <strong>القائمة ⋮</strong> في أعلى اليمين</li>
+        <li>اختر <strong>«إضافة إلى الشاشة الرئيسية»</strong> أو <strong>«تثبيت التطبيق»</strong></li>
+        <li>اضغط <strong>«تثبيت»</strong></li>
+        <li>ستجد أيقونة نواقص في شاشتك الرئيسية!</li>
+      </ol>
+      <a href="/" class="install-btn secondary">🌐 فتح الموقع في Chrome</a>
+    </div>
+
+    <!-- Desktop instructions -->
+    <div id="desktopCard" class="install-card hidden">
+      <div class="platform-icon">💻</div>
+      <div class="platform-title">تثبيت على الكمبيوتر</div>
+      <p class="platform-desc">ثبّت نواقص كتطبيق سطح مكتب على Windows / Mac / Linux</p>
+      <ol class="steps">
+        <li>افتح موقع نواقص في <strong>Chrome</strong> أو <strong>Edge</strong></li>
+        <li>ستظهر أيقونة <strong>التثبيت ➕</strong> في شريط العنوان</li>
+        <li>اضغط عليها ثم اضغط <strong>«تثبيت»</strong></li>
+        <li>أو: اضغط القائمة ⋮ → <strong>«تثبيت نواقص»</strong></li>
+      </ol>
+      <a href="/" class="install-btn secondary">🌐 فتح الموقع</a>
+    </div>
+
+    <!-- APK Download (Android) -->
+    <div class="install-card">
+      <div class="platform-icon">📦</div>
+      <div class="platform-title">تحميل APK مباشر</div>
+      <p class="platform-desc">للأندرويد — حمّل ملف APK وثبّته يدوياً (بدون متجر)</p>
+
+      <div id="apkAvailable" class="hidden">
+        <a href="https://huggingface.co/datasets/safwatkhokha/nawaqes-backup/resolve/main/nawaqes-v1.3.2.apk" download class="install-btn">
+          📦 تحميل تطبيق نواقص v1.3.2
+        </a>
+        <p style="text-align:center; margin-top:0.8rem; font-size:0.85rem; color:rgba(255,255,255,0.6);">
+          تطبيق نواقص — إعلانات، سوق، قنوات، بث مباشر، محفظة
+        </p>
+      </div>
+
+      <div id="apkUnavailable">
+        <div class="alert alert-info">
+          📦 سيتم إضافة ملف APK قريباً. حالياً يمكنك تثبيت التطبيق كـ PWA من الأعلى.
+        </div>
+        <a href="/" class="install-btn secondary">استخدام النسخة Web الآن</a>
+      </div>
+    </div>
+
+    <!-- QR Code for sharing -->
+    <div class="install-card">
+      <div class="platform-icon">📷</div>
+      <div class="platform-title">امسح للتحميل</div>
+      <p class="platform-desc">امسح رمز QR بكاميرا هاتفك لفتح صفحة التثبيت</p>
+      <div class="qr-placeholder">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://safwatkhokha-nawaqes.hf.space/install&color=DC2626&bgcolor=ffffff"
+             alt="QR Code"
+             style="width:160px; height:160px;">
+      </div>
+      <p style="text-align:center; font-size:0.85rem; color:rgba(255,255,255,0.6);">
+        أو شارك الرابط: <code style="background:rgba(255,255,255,0.1); padding:0.2rem 0.4rem; border-radius:4px; font-size:0.8rem;">/install</code>
+      </p>
+    </div>
+
+    <!-- Already installed -->
+    <div id="alreadyInstalled" class="install-card hidden">
+      <div class="platform-icon">✅</div>
+      <div class="platform-title">التطبيق مثبت بالفعل!</div>
+      <p class="platform-desc">يبدو أنك تستخدم تطبيق نواقص بالفعل. استمتع بالتجربة!</p>
+      <a href="/" class="install-btn">🏠 العودة للتطبيق</a>
+    </div>
+
+    <div class="footer">
+      <p>© 2026 نواقص | <a href="/">فتح التطبيق</a> | <a href="/help">المساعدة</a></p>
+    </div>
+  </div>
+
+  <script>
+    // ===== Detect platform =====
+    const ua = navigator.userAgent.toLowerCase();
+    const isIOS = /iphone|ipad|ipod/.test(ua);
+    const isAndroid = /android/.test(ua);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                          window.navigator.standalone === true;
+    const isMobile = isIOS || isAndroid;
+
+    // ===== Check if APK exists =====
+    fetch('https://huggingface.co/datasets/safwatkhokha/nawaqes-backup/resolve/main/nawaqes-v1.3.2.apk', { method: 'HEAD' })
+      .then(r => {
+        if (r.ok) {
+          document.getElementById('apkAvailable').classList.remove('hidden');
+          document.getElementById('apkUnavailable').classList.add('hidden');
+        }
+      })
+      .catch(() => {});
+
+    // ===== Show appropriate card =====
+    if (isStandalone) {
+      document.getElementById('alreadyInstalled').classList.remove('hidden');
+    } else if (isIOS) {
+      document.getElementById('iosCard').classList.remove('hidden');
+    } else if (isAndroid) {
+      document.getElementById('androidCard').classList.remove('hidden');
+    } else {
+      document.getElementById('desktopCard').classList.remove('hidden');
+    }
+
+    // ===== PWA install prompt (Android Chrome only) =====
+    let deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      deferredPrompt = e;
+      // Show the smart install card
+      document.getElementById('installPromptCard').classList.remove('hidden');
+    });
+
+    document.getElementById('installBtn')?.addEventListener('click', async () => {
+      if (!deferredPrompt) {
+        // No prompt available - show instructions
+        alert('للتثبيت: افتح قائمة المتصفح ⋮ واختر "تثبيت التطبيق" أو "إضافة إلى الشاشة الرئيسية"');
+        return;
+      }
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        document.getElementById('installPromptCard').innerHTML = `
+          <div class="alert alert-success">
+            ✅ تم تثبيت التطبيق بنجاح! ستجد أيقونة نواقص على شاشتك الرئيسية.
+          </div>
+        `;
+      }
+      deferredPrompt = null;
+      document.getElementById('installPromptCard').classList.add('hidden');
+    });
+
+    // Detect if app was successfully installed
+    window.addEventListener('appinstalled', () => {
+      document.getElementById('installPromptCard').classList.add('hidden');
+      document.getElementById('alreadyInstalled').classList.remove('hidden');
+    });
+  </script>
+</body>
+</html>

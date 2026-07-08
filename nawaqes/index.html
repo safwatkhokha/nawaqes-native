@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="نواقص - منصة الإعلانات الذكية الأولى | Nawaqes - Smart Ads Platform" />
+    <meta name="theme-color" content="#10B981" />
+
+    <!-- PWA / Mobile App -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="نواقص" />
+    <meta name="application-name" content="نواقص" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+    <link rel="apple-mobile-web-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/favicon.svg" color="#10B981" />
+
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="نواقص | Nawaqes" />
+    <meta property="og:description" content="منصة الإعلانات الذكية الأولى - مساعد ذكاء اصطناعي، محفظة إلكترونية، وسوق متكامل" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/icons/og-image.png" />
+    <meta property="og:locale" content="ar_AR" />
+    <meta property="og:locale:alternate" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="نواقص | Nawaqes" />
+    <meta name="twitter:description" content="منصة الإعلانات الذكية الأولى" />
+    <meta name="twitter:image" content="/icons/og-image.png" />
+
+    <title>نواقص | Nawaqes - منصة الإعلانات الذكية</title>
+
+    <!-- 🔧 CRITICAL: Force-unregister ALL Service Workers BEFORE any other script -->
+    <!-- This prevents white screen from stale SW cache -->
+    <script>
+      (function() {
+        if ('serviceWorker' in navigator) {
+          // Register OUR service worker (for FCM background push notifications).
+          // This SW handles 'push' and 'notificationclick' events so notifications
+          // arrive even when the app is closed or in background.
+          // Previously this block UNREGISTERED all SWs (legacy caching cleanup),
+          // which broke background push notifications entirely.
+          navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(function(reg) {
+            console.log('[SW] Registered:', reg.scope);
+          }).catch(function(err) {
+            console.warn('[SW] Registration failed:', err);
+          });
+        }
+        // Clear old caches (legacy from previous SW versions)
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            names.forEach(function(name) {
+              caches.delete(name);
+            });
+          });
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

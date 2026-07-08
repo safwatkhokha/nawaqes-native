@@ -1,13 +1,2 @@
-/.expo/
-/dist/
-/web-build/
-/node_modules/
-*.log
-.DS_Store
-.env
-.env.local
-.idea/
-.vscode/
-*.jks
-*.keystore
-google-services.json
+skills/
+node_modules/

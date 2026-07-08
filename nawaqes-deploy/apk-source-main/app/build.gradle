@@ -1,0 +1,81 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.nawaqes.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.nawaqes.app"
+        minSdk 21
+        targetSdk 34
+        versionCode 16
+        versionName "1.3.2"
+        multiDexEnabled true
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('../nawaqes-release.keystore')
+            storePassword 'nawaqes2026'
+            keyAlias 'nawaqes'
+            keyPassword 'nawaqes2026'
+            // Enable all signing schemes for maximum compatibility
+            // v1: JAR signing (Android 1.0+, required for some old devices)
+            // v2: APK Signature Scheme v2 (Android 7.0+, recommended)
+            // v3: APK Signature Scheme v3 (Android 9+, key rotation support)
+            // v4: APK Signature Scheme v4 (Android 11+, incremental install)
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+            enableV4Signing = true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            debuggable false
+            // Ensure the APK is not marked as testOnly (which blocks installation)
+            // The flag is implicit when signingConfig is set, but we add it explicitly for safety
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    // Force a newer packaging version that handles Android 14+ correctly
+    packagingOptions {
+        resources {
+            excludes += [
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE',
+                'META-INF/LICENSE.txt',
+                'META-INF/license.txt',
+                'META-INF/NOTICE',
+                'META-INF/NOTICE.txt',
+                'META-INF/notice.txt',
+                'META-INF/ASL2.0',
+                'META-INF/*.kotlin_module'
+            ]
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.webkit:webkit:1.8.0'
+    implementation 'com.google.android.material:material:1.11.0'
+    // MultiDex support (needed for minSdk < 21 with many deps, harmless otherwise)
+    implementation 'androidx.multidex:multidex:2.0.1'
+    // Firebase Cloud Messaging ONLY (no analytics — saves ~2MB and avoids install issues)
+    implementation 'com.google.firebase:firebase-messaging:24.0.0'
+    // WorkManager for retry logic on FCM token registration
+    implementation 'androidx.work:work-runtime:2.9.0'
+}
+

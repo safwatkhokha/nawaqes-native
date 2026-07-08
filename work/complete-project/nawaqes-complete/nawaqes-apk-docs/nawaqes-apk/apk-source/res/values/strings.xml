@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App identity -->
+    <string name="app_name">نواقص</string>
+    <string name="app_name_en">Nawaqes</string>
+
+    <!-- Notification channels -->
+    <string name="channel_default">إشعارات عامة</string>
+    <string name="channel_default_desc">إشعارات التطبيق العامة</string>
+    <string name="channel_messages">الرسائل</string>
+    <string name="channel_messages_desc">إشعارات الرسائل الجديدة</string>
+    <string name="channel_market">السوق</string>
+    <string name="channel_market_desc">إعلانات السوق والعروض</string>
+    <string name="channel_wallet">المحفظة</string>
+    <string name="channel_wallet_desc">إشعارات الرصيد والمعاملات</string>
+
+    <!-- Colors -->
+    <color name="colorPrimary">#DC2626</color>
+    <color name="colorPrimaryDark">#B91C1C</color>
+    <color name="colorAccent">#F59E0B</color>
+    <color name="colorBackground">#1E0C0C</color>
+    <color name="colorWhite">#FFFFFF</color>
+    <color name="colorBlack">#000000</color>
+
+    <!-- Default notification channel ID -->
+    <string name="default_notification_channel_id" translatable="false">nawaqes_default</string>
+</resources>

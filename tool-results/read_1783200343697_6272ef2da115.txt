@@ -1,0 +1,1457 @@
+     1→// --- Nawaqes Server (Production-Ready Secure) ---
+     2→// 🔒 FIX: import dotenv + fs + path FIRST and call dotenv.config() before
+     3→// any imports that touch process.env (database/index.ts needs
+     4→// ADMIN_PASSWORD at import time to seed the admin user). Previously
+     5→// `import { wsManager } from './websocket/index.js'` ran before
+     6→// dotenv.config() — that chain pulls in database/index.ts which reads
+     7→// process.env.ADMIN_PASSWORD, getting the placeholder/empty value and
+     8→// refusing to start. Now dotenv.config() runs first, and wsManager is
+     9→// imported dynamically AFTER env is loaded.
+    10→import dotenv from 'dotenv';
+    11→import path from 'path';
+    12→import fs from 'fs';
+    13→
+    14→const rootDir = process.cwd();
+    15→
+    16→// --- Detect persistent storage (HF Spaces uses /data) ---
+    17→const PERSISTENT_DIR = fs.existsSync('/data') ? '/data' : path.resolve(rootDir, 'data');
+    18→console.log(`[SETUP] Persistent storage: ${PERSISTENT_DIR}`);
+    19→
+    20→// --- Auto-setup: Create .env and directories if missing ---
+    21→// Use persistent storage for .env to prevent JWT_SECRET reset on container rebuild
+    22→const envPath = fs.existsSync(path.resolve(PERSISTENT_DIR, '.env'))
+    23→  ? path.resolve(PERSISTENT_DIR, '.env')
+    24→  : path.resolve(rootDir, '.env');
+    25→const envExamplePath = path.resolve(rootDir, '.env.example');
+    26→if (!fs.existsSync(envPath) && fs.existsSync(envExamplePath)) {
+    27→  fs.copyFileSync(envExamplePath, envPath);
+    28→  console.log(`[SETUP] Created .env at ${envPath}`);
+    29→}
+    30→for (const dir of ['uploads', 'data', 'backups']) {
+    31→  const dirPath = path.resolve(rootDir, dir);
+    32→  if (!fs.existsSync(dirPath)) {
+    33→    fs.mkdirSync(dirPath, { recursive: true });
+    34→    console.log(`[SETUP] Created ${dir}/ directory`);
+    35→  }
+    36→}
+    37→// Ensure persistent storage subdirectories exist
+    38→for (const dir of ['uploads', 'uploads/videos', 'backups']) {
+    39→  const dirPath = path.resolve(PERSISTENT_DIR, dir);
+    40→  if (!fs.existsSync(dirPath)) {
+    41→    fs.mkdirSync(dirPath, { recursive: true });
+    42→    console.log(`[SETUP] Created persistent ${dir}/ directory`);
+    43→  }
+    44→}
+    45→
+    46→// Load environment variables — MUST happen BEFORE imports that touch process.env
+    47→dotenv.config({ path: envPath });
+    48→dotenv.config({ path: path.resolve(rootDir, '.env.local') });
+    49→
+    50→// --- Now safe to import modules that depend on process.env ---
+    51→import express from 'express';
+    52→import { createServer as createHttpServer } from 'http';
+    53→import { createServer as createViteServer } from 'vite';
+    54→import cors from 'cors';
+    55→import crypto from 'crypto';
+    56→// 🔒 NOTE: wsManager is imported DYNAMICALLY inside startServer() to ensure
+    57→// all env vars are loaded first. The static import below would trigger
+    58→// database/index.ts initialization before dotenv.config() runs.
+    59→
+    60→// --- Auto-configure missing env vars (write to .env silently) ---
+    61→// NOTE: This function is kept for non-secret env vars only (e.g., APP_URL).
+    62→// It MUST NOT be used for secrets (JWT_SECRET, ADMIN_PASSWORD, etc.) —
+    63→// secrets must be provided via the environment / mounted /data/.env file
+    64→// and the server will refuse to start without them in production.
+    65→function autoSetEnv(key: string, value: string) {
+    66→  process.env[key] = value;
+    67→  try {
+    68→    const envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+    69→    const lines = envContent.split('\n');
+    70→    const keyPattern = new RegExp(`^${key}=`);
+    71→    const existingIndex = lines.findIndex(l => keyPattern.test(l));
+    72→    if (existingIndex >= 0) {
+    73→      lines[existingIndex] = `${key}=${value}`;
+    74→    } else {
+    75→      lines.push(`${key}=${value}`);
+    76→    }
+    77→    fs.writeFileSync(envPath, lines.join('\n'), 'utf-8');
+    78→    // Also save to persistent .env if different from main .env
+    79→    const persistentEnvPath = path.resolve(PERSISTENT_DIR, '.env');
+    80→    if (persistentEnvPath !== envPath) {
+    81→      try {
+    82→        const pEnvContent = fs.existsSync(persistentEnvPath) ? fs.readFileSync(persistentEnvPath, 'utf-8') : '';
+    83→        const pLines = pEnvContent.split('\n');
+    84→        const pExistingIndex = pLines.findIndex(l => keyPattern.test(l));
+    85→        if (pExistingIndex >= 0) {
+    86→          pLines[pExistingIndex] = `${key}=${value}`;
+    87→        } else {
+    88→          pLines.push(`${key}=${value}`);
+    89→        }
+    90→        fs.writeFileSync(persistentEnvPath, pLines.join('\n'), 'utf-8');
+    91→      } catch { /* ignore */ }
+    92→    }
+    93→  } catch { /* ignore write errors */ }
+    94→}
+    95→
+    96→// 🔒 SECURITY: JWT_SECRET must be set by the operator. Refuse to start in
+    97→// production if missing. In development, generate an ephemeral one (NOT
+    98→// persisted) so the developer sees the warning loudly on every restart.
+    99→const jwtSecret = process.env.JWT_SECRET;
+   100→const isProduction = process.env.NODE_ENV === 'production';
+   101→const isEphemeralSecret = !jwtSecret
+   102→  || jwtSecret === 'REPLACE-WITH-YOUR-OWN-SECURE-RANDOM-STRING'
+   103→  || jwtSecret === 'CHANGE_ME_TO_A_RANDOM_64_PLUS_CHAR_HEX_STRING'
+   104→  || jwtSecret === 'nawaqes_secret_2024_xK9pL2mN8qR3wY6'; // known leaked value
+   105→if (isEphemeralSecret) {
+   106→  if (isProduction) {
+   107→    console.error('[CONFIG] ❌ JWT_SECRET is missing or looks like a placeholder/known-leaked value.');
+   108→    console.error('[CONFIG] ❌ Refusing to start in production. Set JWT_SECRET in your environment / .env');
+   109→    console.error('[CONFIG] ❌ Generate one with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
+   110→    process.exit(1);
+   111→  } else {
+   112→    const ephemeral = crypto.randomBytes(64).toString('hex');
+   113→    process.env.JWT_SECRET = ephemeral;
+   114→    console.warn('[CONFIG] ⚠️  JWT_SECRET not set — using EPHEMERAL secret for this dev session only.');
+   115→    console.warn('[CONFIG] ⚠️  All tokens will be invalidated on restart. Set JWT_SECRET in .env for persistence.');
+   116→  }
+   117→}
+   118→
+   119→// 🔒 SECURITY: In production, ADMIN_PASSWORD / OWNER_PASSWORD must be set
+   120→// (the database module re-checks, but fail fast here for clearer errors).
+   121→if (isProduction) {
+   122→  const missing: string[] = [];
+   123→  if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD.length < 8) {
+   124→    missing.push('ADMIN_EMAIL / ADMIN_PASSWORD (min 8 chars)');
+   125→  }
+   126→  if (!process.env.OWNER_EMAIL || !process.env.OWNER_PASSWORD || process.env.OWNER_PASSWORD.length < 8) {
+   127→    missing.push('OWNER_EMAIL / OWNER_PASSWORD (min 8 chars)');
+   128→  }
+   129→  if (missing.length > 0) {
+   130→    console.error('[CONFIG] ❌ Missing required environment variables for production:');
+   131→    for (const m of missing) console.error(`[CONFIG]   - ${m}`);
+   132→    console.error('[CONFIG] ❌ Refusing to start. Set these in .env or platform secrets.');
+   133→    process.exit(1);
+   134→  }
+   135→}
+   136→
+   137→// Import middleware
+   138→import { validateInput, rateLimit, securityHeaders } from './middleware/validation.js';
+   139→
+   140→// Import routes
+   141→import authRoutes from './routes/auth.js';
+   142→import postRoutes from './routes/posts.js';
+   143→import chatRoutes from './routes/chat.js';
+   144→import walletRoutes from './routes/wallet.js';
+   145→import adminRoutes from './routes/admin.js';
+   146→import apiRoutes from './routes/api.js';
+   147→import marketRoutes from './routes/market.js';
+   148→import smartReachRoutes from './routes/smartReach.js';
+   149→import aiRoutes from './routes/ai.js';
+   150→import channelRoutes from './routes/channels.js';
+   151→
+   152→async function startServer() {
+   153→  // 🔧 Safety net: also try to restore from HF backup if needed.
+   154→  // The PRIMARY restore happens via `dist/restore.mjs` BEFORE this
+   155→  // server starts (see Dockerfile CMD). This call here is a fallback
+   156→  // for dev mode / non-Docker environments. In production it will
+   157→  // typically skip because the DB will already exist and be fresh.
+   158→  try {
+   159→    const { autoRestoreDB } = await import('./database/auto-restore.js');
+   160→    await autoRestoreDB();
+   161→  } catch (err: any) {
+   162→    console.warn('[RESTORE] Failed:', err.message);
+   163→  }
+   164→
+   165→  // ─── Cleanup: delete OLD like/comment/friend notifications (>7 days) ───
+   166→  // Previously this deleted ALL of these types on every boot, which wiped
+   167→  // legitimate notifications. Now scoped to old rows only.
+   168→  try {
+   169→    const db = (await import('./database/index.js')).default;
+   170→    const result = db.prepare(
+   171→      "DELETE FROM notifications WHERE type IN ('like', 'comment', 'friend') AND created_at < datetime('now', '-7 days')"
+   172→    ).run();
+   173→    if (result.changes > 0) {
+   174→      console.log(`[CLEANUP] Deleted ${result.changes} old (>7d) like/comment/friend notifications`);
+   175→    }
+   176→  } catch {}
+   177→
+   178→  const app = express();
+   179→  const PORT = parseInt(process.env.PORT || '3000', 10);
+   180→  const isDev = process.env.NODE_ENV !== 'production';
+   181→
+   182→  // 🔒 SECURITY: Trust the first proxy hop so req.ip reflects the real client IP
+   183→  // when running behind a reverse proxy (HF Spaces / Render / Koyeb / nginx).
+   184→  // Without this, rate limiting and per-IP view deduplication are broken —
+   185→  // all requests appear to come from the proxy's IP.
+   186→  app.set('trust proxy', 1);
+   187→
+   188→  // --- Global error handling ---
+   189→  process.on('uncaughtException', (err) => {
+   190→    console.error('[FATAL] Uncaught Exception:', err.message);
+   191→    process.exit(1);
+   192→  });
+   193→  process.on('unhandledRejection', (reason) => {
+   194→    console.error('[FATAL] Unhandled Rejection:', reason);
+   195→  });
+   196→
+   197→  // =====================================================
+   198→  // MIDDLEWARE ORDER MATTERS!
+   199→  // 1. CORS           - must be first
+   200→  // 2. Security       - sets headers on ALL responses (including Vite pages)
+   201→  // 3. JSON parser    - parses request bodies
+   202→  // 4. Rate limit     - skips Vite/asset paths
+   203→  // 5. Validation     - only checks POST/PUT JSON bodies
+   204→  // 6. Uploads        - serves uploaded files
+   205→  // 7. API routes     - handles /api/* requests
+   206→  // 8. Vite / Static  - serves frontend (catch-all)
+   207→  // =====================================================
+   208→
+   209→  // 1. CORS (must be first)
+   210→  const allowedOrigins = isDev
+   211→    ? true
+   212→    : [
+   213→        process.env.APP_URL || `http://localhost:${PORT}`,
+   214→        'https://huggingface.co',
+   215→        'https://*.huggingface.co',
+   216→        /^https:\/\/[a-zA-Z0-9-]+\.huggingface\.co$/,
+   217→        /^https:\/\/[a-zA-Z0-9-]+\.hf\.space$/,
+   218→        /^https:\/\/[a-zA-Z0-9-]+-[a-zA-Z0-9-]+\.hf\.space$/,
+   219→      ];
+   220→  app.use(cors({
+   221→    origin: allowedOrigins,
+   222→    credentials: true,
+   223→  }));
+   224→
+   225→  // 2. Security headers - MUST come before Vite so CSP is set on ALL responses
+   226→  app.use(securityHeaders);
+   227→
+   228→  // 3. Parse JSON bodies.
+   229→  // 🔒 SECURITY FIX: previously the global limit was 50mb which let any
+   230→  // endpoint (including /api/auth/login) be abused as a memory-exhaustion
+   231→  // vector. We use a safe default of 1mb globally, and a larger 50mb limit
+   232→  // ONLY on the specific upload routes that need it.
+   233→  app.use(express.json({ limit: '5mb' }));
+   234→
+   235→  // 3b. Disable caching for ALL API responses.
+   236→  // Without this, the Android WebView caches API responses and serves
+   237→  // stale data (different posts on app vs website).
+   238→  app.use('/api', (_req: express.Request, res: express.Response, next: express.NextFunction) => {
+   239→    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+   240→    res.setHeader('Pragma', 'no-cache');
+   241→    res.setHeader('Expires', '0');
+   242→    next();
+   243→  });
+   244→
+   245→  // JSON parse error handler
+   246→  app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+   247→    if (err.type === 'entity.parse.failed') {
+   248→      res.status(400).json({ error: 'بيانات غير صالحة' });
+   249→      return;
+   250→    }
+   251→    next(err);
+   252→  });
+   253→
+   254→  // 4. Rate limiting (skips Vite HMR paths and static assets)
+   255→  app.use(rateLimit);
+   256→
+   257→  // 5. Input validation (only affects POST/PUT/PATCH with JSON)
+   258→  app.use(validateInput);
+   259→
+   260→  // 6. Serve uploaded files (with caching headers)
+   261→  app.use('/uploads', express.static(path.resolve('uploads'), {
+   262→    maxAge: '7d',
+   263→    etag: true,
+   264→    lastModified: true,
+   265→  }));
+   266→  // Also ensure videos directory exists
+   267→  const videosDir = path.resolve('uploads/videos');
+   268→  if (!fs.existsSync(videosDir)) fs.mkdirSync(videosDir, { recursive: true });
+   269→
+   270→  // 7. API Routes
+   271→  app.use('/api/auth', authRoutes);
+   272→  app.use('/api/posts', postRoutes);
+   273→  app.use('/api/chat', chatRoutes);
+   274→  app.use('/api/wallet', walletRoutes);
+   275→  app.use('/api/admin', adminRoutes);
+   276→  app.use('/api/market', marketRoutes);
+   277→  app.use('/api/smart-reach', smartReachRoutes);
+   278→  app.use('/api/ai', aiRoutes);
+   279→  app.use('/api/channels', channelRoutes);
+   280→  app.use('/api', apiRoutes);
+   281→
+   282→  // Health check endpoint (no auth required)
+   283→  app.get('/api/health', (_req, res) => {
+   284→    res.json({
+   285→      status: 'ok',
+   286→      env: process.env.NODE_ENV || 'development',
+   287→      uptime: process.uptime(),
+   288→      ts: new Date().toISOString(),
+   289→      version: '1.1.0',
+   290→    });
+   291→  });
+   292→
+   293→  // ─── WebRTC ICE configuration endpoint ─────────────────────────────
+   294→  // 🔒 SECURITY FIX: previously this endpoint was PUBLIC and returned
+   295→  // long-lived TURN credentials hardcoded as defaults. Now:
+   296→  //   1. Requires authentication (any logged-in user).
+   297→  //   2. Removes hardcoded defaults — server refuses to return TURN
+   298→  //      servers if METERED_TURN_URL / USERNAME / CREDENTIAL are unset.
+   299→  //   3. The frontend already calls this with the user's JWT.
+   300→  app.get('/api/webrtc/config', async (req, res) => {
+   301→    // Require auth — refuse anonymous TURN-credential harvesting.
+   302→    const authHeader = req.headers.authorization;
+   303→    if (!authHeader?.startsWith('Bearer ')) {
+   304→      res.status(401).json({ error: 'Unauthorized' });
+   305→      return;
+   306→    }
+   307→    const { verifyToken } = await import('./middleware/auth.js');
+   308→    const payload = verifyToken(authHeader.split(' ')[1]);
+   309→    if (!payload?.userId) {
+   310→      res.status(401).json({ error: 'Invalid token' });
+   311→      return;
+   312→    }
+   313→
+   314→    const turnUrl = process.env.METERED_TURN_URL;
+   315→    const turnUsername = process.env.METERED_TURN_USERNAME;
+   316→    const turnCredential = process.env.METERED_TURN_CREDENTIAL;
+   317→
+   318→    const iceServers: any[] = [
+   319→      { urls: 'stun:stun.l.google.com:19302' },
+   320→      { urls: 'stun:stun1.l.google.com:19302' },
+   321→    ];
+   322→
+   323→    // Only include TURN if all three env vars are configured (no defaults).
+   324→    if (turnUrl && turnUsername && turnCredential
+   325→        && turnUsername !== turnCredential // reject obvious copy-paste config
+   326→    ) {
+   327→      iceServers.push({
+   328→        urls: [
+   329→          `turn:${turnUrl}:80`,
+   330→          `turn:${turnUrl}:443?transport=tcp`,
+   331→          `turns:${turnUrl}:443`,
+   332→        ],
+   333→        username: turnUsername,
+   334→        credential: turnCredential,
+   335→      });
+   336→    } else if (isDev) {
+   337→      console.warn('[WEBRTC] ⚠️ TURN credentials not configured — calls will fall back to STUN-only.');
+   338→    }
+   339→
+   340→    res.json({
+   341→      iceServers,
+   342→      iceTransportPolicy: 'all',
+   343→      bundlePolicy: 'max-bundle',
+   344→      rtcpMuxPolicy: 'require',
+   345→    });
+   346→  });
+   347→
+   348→  // Log all registered API routes for debugging
+   349→  const registeredRoutes: string[] = [];
+   350→  app._router?.stack?.forEach((layer: any) => {
+   351→    if (layer.route) {
+   352→      registeredRoutes.push(`${Object.keys(layer.route.methods).join(',').toUpperCase()} ${layer.route.path}`);
+   353→    } else if (layer.name === 'router' && layer.regexp) {
+   354→      const match = layer.regexp.toString().match(/\/api\/\w+/);
+   355→      if (match) registeredRoutes.push(`Router: ${match[0]}`);
+   356→    }
+   357→  });
+   358→  console.log('[API] Registered routes:', registeredRoutes.join(', '));
+   359→
+   360→  // Diagnostics endpoint (admin only in production)
+   361→  app.get('/api/diagnostics', async (req, res) => {
+   362→    if (!isDev) {
+   363→      // In production, require admin auth for diagnostics - properly validate JWT token
+   364→      const authHeader = req.headers.authorization;
+   365→      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+   366→        res.status(401).json({ error: 'Unauthorized' });
+   367→        return;
+   368→      }
+   369→      // Verify the JWT token
+   370→      const { verifyToken } = await import('./middleware/auth.js');
+   371→      const token = authHeader.split(' ')[1];
+   372→      const payload = verifyToken(token);
+   373→      if (!payload || !payload.isAdmin) {
+   374→        res.status(403).json({ error: 'Admin access required' });
+   375→        return;
+   376→      }
+   377→    }
+   378→    const routes: string[] = [];
+   379→    app._router?.stack?.forEach((layer: any) => {
+   380→      if (layer.route) {
+   381→        routes.push(`${Object.keys(layer.route.methods).join(',').toUpperCase()} ${layer.route.path}`);
+   382→      } else if (layer.name === 'router' && layer.regexp) {
+   383→        const match = layer.regexp.toString().match(/\/api\/\w+/);
+   384→        if (match) routes.push(`Router: ${match[0]}`);
+   385→      }
+   386→    });
+   387→    res.json({
+   388→      status: 'ok',
+   389→      env: process.env.NODE_ENV || 'development',
+   390→      port: PORT,
+   391→      uptime: process.uptime(),
+   392→      routes,
+   393→      ts: new Date().toISOString(),
+   394→    });
+   395→  });
+   396→
+   397→  // 7b. APK download endpoint (serves APK file)
+   398→  // Place APKs in /data/downloads/ or ./downloads/
+   399→  const downloadsDir = fs.existsSync('/data/downloads')
+   400→    ? '/data/downloads'
+   401→    : path.resolve(rootDir, 'downloads');
+   402→  if (!fs.existsSync(downloadsDir)) {
+   403→    fs.mkdirSync(downloadsDir, { recursive: true });
+   404→    console.log(`[SETUP] Created downloads/ directory at ${downloadsDir}`);
+   405→  }
+   406→  app.use('/download', express.static(downloadsDir, {
+   407→    maxAge: '1h',
+   408→    etag: true,
+   409→    lastModified: true,
+   410→    setHeaders: (res, filePath) => {
+   411→      if (filePath.endsWith('.apk')) {
+   412→        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+   413→        res.setHeader('Content-Disposition', 'attachment');
+   414→      }
+   415→    },
+   416→  }));
+   417→
+   418→  // Download landing page (public)
+   419→  app.get('/get-app', (_req, res) => {
+   420→    const downloadPagePath = path.resolve(rootDir, 'public', 'download.html');
+   421→    const distDownloadPath = path.resolve(rootDir, 'dist', 'client', 'download.html');
+   422→    if (fs.existsSync(distDownloadPath)) {
+   423→      res.sendFile(distDownloadPath);
+   424→    } else if (fs.existsSync(downloadPagePath)) {
+   425→      res.sendFile(downloadPagePath);
+   426→    } else {
+   427→      res.redirect('/');
+   428→    }
+   429→  });
+   430→
+   431→  // ─── /download page (same as /get-app) ────────────────────────────
+   432→  // Serves the download landing page. This is separate from the
+   433→  // express.static('/download', ...) which serves APK files — that
+   434→  // only matches /download/<filename>, not /download/ by itself.
+   435→  app.get('/download', (_req, res) => {
+   436→    const downloadPagePath = path.resolve(rootDir, 'public', 'download.html');
+   437→    const distDownloadPath = path.resolve(rootDir, 'dist', 'client', 'download.html');
+   438→    if (fs.existsSync(distDownloadPath)) {
+   439→      res.sendFile(distDownloadPath);
+   440→    } else if (fs.existsSync(downloadPagePath)) {
+   441→      res.sendFile(downloadPagePath);
+   442→    } else {
+   443→      res.redirect('/get-app');
+   444→    }
+   445→  });
+   446→
+   447→  // Smart install page (auto-detects platform: iOS/Android/Desktop)
+   448→  app.get('/install', (_req, res) => {
+   449→    const installPagePath = path.resolve(rootDir, 'public', 'install.html');
+   450→    const distInstallPath = path.resolve(rootDir, 'dist', 'client', 'install.html');
+   451→    if (fs.existsSync(distInstallPath)) {
+   452→      res.sendFile(distInstallPath);
+   453→    } else if (fs.existsSync(installPagePath)) {
+   454→      res.sendFile(installPagePath);
+   455→    } else {
+   456→      res.redirect('/get-app');
+   457→    }
+   458→  });
+   459→
+   460→  // ─── Standalone Chat App (lightweight, Messenger-like) ────────────
+   461→  // Serves chat.html which loads only chat-related code (~15KB vs 1.2MB
+   462→  // for the full app). Used by the "Nawaqes Chat" APK.
+   463→  app.get('/chat-app', (_req, res) => {
+   464→    res.redirect('/#/chat-app');
+   465→  });
+   466→
+   467→  // Firebase setup guide page (interactive Arabic guide)
+   468→  app.get('/firebase-setup', (_req, res) => {
+   469→    const setupPagePath = path.resolve(rootDir, 'public', 'firebase-setup.html');
+   470→    const distSetupPath = path.resolve(rootDir, 'dist', 'client', 'firebase-setup.html');
+   471→    if (fs.existsSync(distSetupPath)) {
+   472→      res.sendFile(distSetupPath);
+   473→    } else if (fs.existsSync(setupPagePath)) {
+   474→      res.sendFile(setupPagePath);
+   475→    } else {
+   476→      res.redirect('/get-app');
+   477→    }
+   478→  });
+   479→
+   480→  // Interactive Firebase config collector (auto-generates config JSON)
+   481→  app.get('/firebase-setup-interactive', (_req, res) => {
+   482→    const setupPagePath = path.resolve(rootDir, 'public', 'firebase-setup-interactive.html');
+   483→    const distSetupPath = path.resolve(rootDir, 'dist', 'client', 'firebase-setup-interactive.html');
+   484→    if (fs.existsSync(distSetupPath)) {
+   485→      res.sendFile(distSetupPath);
+   486→    } else if (fs.existsSync(setupPagePath)) {
+   487→      res.sendFile(setupPagePath);
+   488→    } else {
+   489→      res.redirect('/firebase-setup');
+   490→    }
+   491→  });
+   492→
+   493→  // Serve download.html at /download too (for cleaner URL)
+   494→  app.get('/download.html', (_req, res) => {
+   495→    const downloadPagePath = path.resolve(rootDir, 'public', 'download.html');
+   496→    const distDownloadPath = path.resolve(rootDir, 'dist', 'client', 'download.html');
+   497→    if (fs.existsSync(distDownloadPath)) {
+   498→      res.sendFile(distDownloadPath);
+   499→    } else if (fs.existsSync(downloadPagePath)) {
+   500→      res.sendFile(downloadPagePath);
+   501→    } else {
+   502→      res.redirect('/get-app');
+   503→    }
+   504→  });
+   505→
+   506→  // ===========================================
+   507→  // 7c. Firebase config endpoint (public, no secrets)
+   508→  // ===========================================
+   509→  app.get('/api/notifications/firebase-config', (_req, res) => {
+   510→    res.json({
+   511→      apiKey: process.env.FIREBASE_API_KEY || '',
+   512→      authDomain: process.env.FIREBASE_AUTH_DOMAIN || `${process.env.FIREBASE_PROJECT_ID || 'nawaqes-app'}.firebaseapp.com`,
+   513→      projectId: process.env.FIREBASE_PROJECT_ID || 'nawaqes-app',
+   514→      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${process.env.FIREBASE_PROJECT_ID || 'nawaqes-app'}.appspot.com`,
+   515→      messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
+   516→      appId: process.env.FIREBASE_APP_ID || '',
+   517→      measurementId: process.env.FIREBASE_MEASUREMENT_ID || '',
+   518→      vapidKey: process.env.FIREBASE_VAPID_KEY || '',
+   519→    });
+   520→  });
+   521→
+   522→  // ===========================================
+   523→  // 7d. Device registration for push notifications
+   524→  // Auth is required: an unauthenticated caller must not be able to
+   525→  // supply an arbitrary token and DELETE/UPDATE rows belonging to other
+   526→  // users. Guest (anonymous) device registration is intentionally removed
+   527→  // — only logged-in users receive push notifications anyway.
+   528→  // ===========================================
+   529→  app.post('/api/notifications/register-device', async (req, res) => {
+   530→    try {
+   531→      const { token, platform } = req.body;
+   532→      if (!token || !platform) {
+   533→        res.status(400).json({ error: 'token and platform required' });
+   534→        return;
+   535→      }
+   536→      const authHeader = req.headers.authorization;
+   537→      if (!authHeader?.startsWith('Bearer ')) {
+   538→        res.status(401).json({ error: 'Unauthorized' });
+   539→        return;
+   540→      }
+   541→      const { verifyToken } = await import('./middleware/auth.js');
+   542→      const payload = verifyToken(authHeader.split(' ')[1]);
+   543→      if (!payload) {
+   544→        res.status(401).json({ error: 'Invalid or expired token' });
+   545→        return;
+   546→      }
+   547→      const userId: string = payload.userId || payload.sub || '';
+   548→      if (!userId) {
+   549→        res.status(401).json({ error: 'Unauthorized' });
+   550→        return;
+   551→      }
+   552→      // Save or update device token in database
+   553→      try {
+   554→        const db = (await import('./database/index.js')).default;
+   555→        // Remove token from any other user (a token can only belong to one user)
+   556→        db.prepare('DELETE FROM devices WHERE token = ? AND user_id != ?').run(token, userId);
+   557→        // Upsert device token
+   558→        const existing = db.prepare('SELECT id FROM devices WHERE token = ?').get(token) as any;
+   559→        if (existing) {
+   560→          db.prepare('UPDATE devices SET user_id = ?, platform = ?, updated_at = datetime(\'now\') WHERE token = ?').run(userId, platform, token);
+   561→        } else {
+   562→          db.prepare('INSERT INTO devices (user_id, token, platform) VALUES (?, ?, ?)').run(userId, token, platform);
+   563→        }
+   564→      } catch (dbErr: any) {
+   565→        console.warn('[FCM] Failed to save device token:', dbErr.message);
+   566→      }
+   567→      console.log(`[FCM] Device registered: platform=${platform}, user=${userId}`);
+   568→      res.json({ success: true, registered: true });
+   569→    } catch (err: any) {
+   570→      console.error('[FCM] register-device error:', err.message);
+   571→      res.status(500).json({ error: 'Failed to register device' });
+   572→    }
+   573→  });
+   574→
+   575→  // Topic subscription
+   576→  app.post('/api/notifications/subscribe', async (req, res) => {
+   577→    try {
+   578→      const { topic } = req.body;
+   579→      if (!topic) {
+   580→        res.status(400).json({ error: 'topic required' });
+   581→        return;
+   582→      }
+   583→      console.log(`[FCM] Topic subscription: ${topic}`);
+   584→      res.json({ success: true, subscribed: true, topic });
+   585→    } catch (err: any) {
+   586→      res.status(500).json({ error: 'Failed to subscribe' });
+   587→    }
+   588→  });
+   589→
+   590→  // Send push notification to a specific user or broadcast to all
+   591→  app.post('/api/notifications/send', async (req, res) => {
+   592→    try {
+   593→      const authHeader = req.headers.authorization;
+   594→      if (!authHeader?.startsWith('Bearer ')) {
+   595→        res.status(401).json({ error: 'Unauthorized' });
+   596→        return;
+   597→      }
+   598→      const { verifyToken } = await import('./middleware/auth.js');
+   599→      const payload = verifyToken(authHeader.split(' ')[1]);
+   600→      if (!payload?.isAdmin) {
+   601→        res.status(403).json({ error: 'Admin access required' });
+   602→        return;
+   603→      }
+   604→      const { userId: targetUserId, userIds: targetUserIds, title, body, data, topic } = req.body;
+   605→      if (!title || !body) {
+   606→        res.status(400).json({ error: 'title and body required' });
+   607→        return;
+   608→      }
+   609→
+   610→      // Broadcast to all users
+   611→      if (targetUserId === 'all' || (targetUserIds && targetUserIds.length === 0)) {
+   612→        const db = (await import('./database/index.js')).default;
+   613→        const allUsers = db.prepare('SELECT id FROM users WHERE is_deactivated = 0').all() as any[];
+   614→        const { sendPushToUsers } = await import('./services/pushNotifications.js');
+   615→        const result = await sendPushToUsers(allUsers.map(u => u.id), title, body, data);
+   616→        res.json({ success: true, broadcast: true, totalUsers: allUsers.length, ...result });
+   617→        return;
+   618→      }
+   619→
+   620→      // Send to specific user IDs list
+   621→      if (targetUserIds && Array.isArray(targetUserIds) && targetUserIds.length > 0) {
+   622→        const { sendPushToUsers } = await import('./services/pushNotifications.js');
+   623→        const result = await sendPushToUsers(targetUserIds, title, body, data);
+   624→        res.json({ success: true, ...result });
+   625→        return;
+   626→      }
+   627→
+   628→      // Send to a topic
+   629→      if (topic) {
+   630→        const { sendPushToTopic } = await import('./services/pushNotifications.js');
+   631→        const result = await sendPushToTopic(topic, title, body, data);
+   632→        res.json({ success: true, ...result });
+   633→        return;
+   634→      }
+   635→
+   636→      // Send to a single user
+   637→      if (!targetUserId) {
+   638→        res.status(400).json({ error: 'userId, userIds, or topic required' });
+   639→        return;
+   640→      }
+   641→      const { sendPushToUser } = await import('./services/pushNotifications.js');
+   642→      const result = await sendPushToUser(targetUserId, title, body, data);
+   643→      res.json({ success: true, ...result });
+   644→    } catch (err: any) {
+   645→      res.status(500).json({ error: 'Failed to send notification' });
+   646→    }
+   647→  });
+   648→
+   649→  // FCM diagnostics endpoint (admin only)
+   650→  app.get('/api/notifications/fcm-status', async (req, res) => {
+   651→    try {
+   652→      const authHeader = req.headers.authorization;
+   653→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+   654→      const { verifyToken } = await import('./middleware/auth.js');
+   655→      const payload = verifyToken(authHeader.split(' ')[1]);
+   656→      if (!payload?.isAdmin) { res.status(403).json({ error: 'Admin access required' }); return; }
+   657→      const { getFCMStatus } = await import('./services/pushNotifications.js');
+   658→      const db = (await import('./database/index.js')).default;
+   659→      const deviceCount = (db.prepare('SELECT COUNT(*) as count FROM devices').get() as any).count;
+   660→      const status = getFCMStatus();
+   661→      res.json({ ...status, registeredDevices: deviceCount });
+   662→    } catch (err: any) {
+   663→      res.status(500).json({ error: err.message });
+   664→    }
+   665→  });
+   666→
+   667→  // ─── Story API Endpoints ───
+   668→  app.get('/api/stories', async (req, res) => {
+   669→    try {
+   670→      const db = (await import('./database/index.js')).default;
+   671→      const authHeader = req.headers.authorization;
+   672→      let userId = '';
+   673→      if (authHeader?.startsWith('Bearer ')) {
+   674→        try {
+   675→          const { verifyToken } = await import('./middleware/auth.js');
+   676→          const p = verifyToken(authHeader.split(' ')[1]);
+   677→          if (p) userId = p.userId || p.sub || '';
+   678→        } catch {}
+   679→      }
+   680→      // Get stories from last 24 hours only
+   681→      const stories = db.prepare(`
+   682→        SELECT s.*, u.name as user_name, u.avatar as user_avatar,
+   683→          (SELECT COUNT(*) FROM story_views WHERE story_id = s.id) as view_count,
+   684→          CASE WHEN sv.id IS NOT NULL THEN 1 ELSE 0 END as is_seen
+   685→        FROM stories s
+   686→        JOIN users u ON u.id = s.user_id
+   687→        LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.user_id = ?
+   688→        WHERE s.created_at >= datetime('now', '-24 hours')
+   689→        ORDER BY s.created_at DESC
+   690→      `).all(userId) as any[];
+   691→      
+   692→      const result = stories.map(s => ({
+   693→        id: s.id,
+   694→        user: { id: s.user_id, name: s.user_name, avatar: s.user_avatar },
+   695→        image: s.image || '',
+   696→        type: s.type || 'image',
+   697→        text: s.text || '',
+   698→        backgroundColor: s.background_color || '',
+   699→        videoUrl: s.video_url || '',
+   700→        isSeen: !!s.is_seen,
+   701→        viewCount: s.view_count,
+   702→        createdAt: s.created_at,
+   703→      }));
+   704→      res.json(result);
+   705→    } catch (err: any) {
+   706→      res.status(500).json({ error: err.message });
+   707→    }
+   708→  });
+   709→
+   710→  app.post('/api/stories/:id/view', async (req, res) => {
+   711→    try {
+   712→      const db = (await import('./database/index.js')).default;
+   713→      const authHeader = req.headers.authorization;
+   714→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+   715→      const { verifyToken } = await import('./middleware/auth.js');
+   716→      const payload = verifyToken(authHeader.split(' ')[1]);
+   717→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+   718→      const userId = payload.userId || payload.sub;
+   719→      const storyId = req.params.id;
+   720→      db.prepare('INSERT OR IGNORE INTO story_views (story_id, user_id) VALUES (?, ?)').run(storyId, userId);
+   721→      db.prepare('UPDATE stories SET is_seen = 1 WHERE id = ?').run(storyId);
+   722→      res.json({ success: true });
+   723→    } catch (err: any) {
+   724→      res.status(500).json({ error: err.message });
+   725→    }
+   726→  });
+   727→
+   728→  app.post('/api/stories/:id/reply', async (req, res) => {
+   729→    try {
+   730→      const db = (await import('./database/index.js')).default;
+   731→      const authHeader = req.headers.authorization;
+   732→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+   733→      const { verifyToken } = await import('./middleware/auth.js');
+   734→      const payload = verifyToken(authHeader.split(' ')[1]);
+   735→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+   736→      const userId = payload.userId || payload.sub;
+   737→      const storyId = req.params.id;
+   738→      const { text } = req.body;
+   739→      if (!text) { res.status(400).json({ error: 'text required' }); return; }
+   740→      const id = crypto.randomBytes(16).toString('hex');
+   741→      db.prepare('INSERT INTO story_replies (id, story_id, user_id, text) VALUES (?, ?, ?, ?)').run(id, storyId, userId, text);
+   742→      // Notify story owner
+   743→      const story = db.prepare('SELECT user_id FROM stories WHERE id = ?').get(storyId) as any;
+   744→      if (story && story.user_id !== userId) {
+   745→        const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any;
+   746→        const notifId = crypto.randomBytes(16).toString('hex');
+   747→        const notifMsg = `${user?.name || 'مستخدم'} رد على قصتك`;
+   748→        const notifLink = `/messages?contact=${userId}`;
+   749→        db.prepare('INSERT INTO notifications (id, user_id, type, message, link) VALUES (?, ?, ?, ?, ?)').run(
+   750→          notifId, story.user_id, 'message', notifMsg, notifLink
+   751→        );
+   752→        try {
+   753→          const { wsManager } = await import('./websocket/index.js');
+   754→          wsManager.emitNotification(story.user_id, {
+   755→            id: notifId,
+   756→            type: 'message',
+   757→            message: notifMsg,
+   758→            time: new Date().toISOString(),
+   759→            link: notifLink,
+   760→          });
+   761→        } catch {}
+   762→      }
+   763→      res.json({ success: true, id });
+   764→    } catch (err: any) {
+   765→      res.status(500).json({ error: err.message });
+   766→    }
+   767→  });
+   768→
+   769→  app.post('/api/stories/:id/react', async (req, res) => {
+   770→    try {
+   771→      const db = (await import('./database/index.js')).default;
+   772→      const authHeader = req.headers.authorization;
+   773→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+   774→      const { verifyToken } = await import('./middleware/auth.js');
+   775→      const payload = verifyToken(authHeader.split(' ')[1]);
+   776→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+   777→      const userId = payload.userId || payload.sub;
+   778→      const storyId = req.params.id;
+   779→      const { emoji } = req.body;
+   780→      if (!emoji) { res.status(400).json({ error: 'emoji required' }); return; }
+   781→      // Toggle reaction
+   782→      const existing = db.prepare('SELECT id FROM story_reactions WHERE story_id = ? AND user_id = ? AND emoji = ?').get(storyId, userId, emoji) as any;
+   783→      if (existing) {
+   784→        db.prepare('DELETE FROM story_reactions WHERE id = ?').run(existing.id);
+   785→        res.json({ success: true, reacted: false });
+   786→      } else {
+   787→        const id = crypto.randomBytes(16).toString('hex');
+   788→        db.prepare('INSERT INTO story_reactions (id, story_id, user_id, emoji) VALUES (?, ?, ?, ?)').run(id, storyId, userId, emoji);
+   789→        // Notify story owner
+   790→        const story = db.prepare('SELECT user_id FROM stories WHERE id = ?').get(storyId) as any;
+   791→        if (story && story.user_id !== userId) {
+   792→          const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any;
+   793→          const notifId = crypto.randomBytes(16).toString('hex');
+   794→          const notifMsg = `${user?.name || 'مستخدم'} تفاعل مع قصتك ${emoji}`;
+   795→          // Use type='story_reaction' (not 'like') so it shows up in the
+   796→          // notifications list — GET /api/notifications filters out 'like'.
+   797→          db.prepare('INSERT INTO notifications (id, user_id, type, message, link) VALUES (?, ?, ?, ?, ?)').run(
+   798→            notifId, story.user_id, 'story_reaction', notifMsg, null
+   799→          );
+   800→          try {
+   801→            const { wsManager } = await import('./websocket/index.js');
+   802→            wsManager.emitNotification(story.user_id, {
+   803→              id: notifId,
+   804→              type: 'story_reaction',
+   805→              message: notifMsg,
+   806→              time: new Date().toISOString(),
+   807→              link: null,
+   808→            });
+   809→          } catch {}
+   810→        }
+   811→        res.json({ success: true, reacted: true });
+   812→      }
+   813→    } catch (err: any) {
+   814→      res.status(500).json({ error: err.message });
+   815→    }
+   816→  });
+   817→
+   818→  app.get('/api/stories/:id/viewers', async (req, res) => {
+   819→    try {
+   820→      const db = (await import('./database/index.js')).default;
+   821→      const authHeader = req.headers.authorization;
+   822→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+   823→      const { verifyToken } = await import('./middleware/auth.js');
+   824→      const payload = verifyToken(authHeader.split(' ')[1]);
+   825→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+   826→      const storyId = req.params.id;
+   827→      // Verify story belongs to user
+   828→      const story = db.prepare('SELECT user_id FROM stories WHERE id = ?').get(storyId) as any;
+   829→      if (!story) { res.status(404).json({ error: 'Story not found' }); return; }
+   830→      const userId = payload.userId || payload.sub;
+   831→      if (story.user_id !== userId && !payload.isAdmin) {
+   832→        res.status(403).json({ error: 'Not your story' }); return;
+   833→      }
+   834→      const viewers = db.prepare(`
+   835→        SELECT sv.*, u.name, u.avatar FROM story_views sv
+   836→        JOIN users u ON u.id = sv.user_id
+   837→        WHERE sv.story_id = ?
+   838→        ORDER BY sv.created_at DESC
+   839→      `).all(storyId) as any[];
+   840→      res.json(viewers);
+   841→    } catch (err: any) {
+   842→      res.status(500).json({ error: err.message });
+   843→    }
+   844→  });
+   845→
+   846→  // ─── Withdrawal API now handled in routes/wallet.ts ───
+   847→
+   848→  // ─── Story Highlights API ───
+   849→  app.get('/api/users/:userId/highlights', async (req, res) => {
+   850→    try {
+   851→      const db = (await import('./database/index.js')).default;
+   852→      const { userId } = req.params;
+   853→      const highlights = db.prepare(`
+   854→        SELECT h.*, 
+   855→          (SELECT COUNT(*) FROM highlight_stories WHERE highlight_id = h.id) as story_count,
+   856→          (SELECT s.image FROM highlight_stories hs JOIN stories s ON s.id = hs.story_id WHERE hs.highlight_id = h.id LIMIT 1) as cover_image
+   857→        FROM story_highlights h
+   858→        WHERE h.user_id = ?
+   859→        ORDER BY h.created_at DESC
+   860→      `).all(userId) as any[];
+   861→      res.json(highlights);
+   862→    } catch (err: any) {
+   863→      res.status(500).json({ error: err.message });
+   864→    }
+   865→  });
+   866→
+   867→  app.post('/api/highlights', async (req, res) => {
+   868→    try {
+   869→      const db = (await import('./database/index.js')).default;
+   870→      const authHeader = req.headers.authorization;
+   871→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+   872→      const { verifyToken } = await import('./middleware/auth.js');
+   873→      const payload = verifyToken(authHeader.split(' ')[1]);
+   874→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+   875→      const userId = payload.userId || payload.sub;
+   876→      const { name, storyIds } = req.body;
+   877→      if (!name || !storyIds?.length) { res.status(400).json({ error: 'name and storyIds required' }); return; }
+   878→      const id = crypto.randomBytes(16).toString('hex');
+   879→      db.prepare('INSERT INTO story_highlights (id, user_id, name) VALUES (?, ?, ?)').run(id, userId, name);
+   880→      const insertHS = db.prepare('INSERT OR IGNORE INTO highlight_stories (highlight_id, story_id) VALUES (?, ?)');
+   881→      for (const sid of storyIds) { insertHS.run(id, sid); }
+   882→      res.json({ success: true, id });
+   883→    } catch (err: any) {
+   884→      res.status(500).json({ error: err.message });
+   885→    }
+   886→  });
+   887→
+   888→  // ─── Delete expired stories (24h) ───
+   889→  app.delete('/api/stories/expired', async (_req, res) => {
+   890→    try {
+   891→      const db = (await import('./database/index.js')).default;
+   892→      const result = db.prepare("DELETE FROM stories WHERE created_at < datetime('now', '-24 hours')").run();
+   893→      res.json({ success: true, deleted: result.changes });
+   894→    } catch (err: any) {
+   895→      res.status(500).json({ error: err.message });
+   896→    }
+   897→  });
+   898→
+   899→  // ─── Report user from chat ───
+   900→  app.post('/api/report', async (req, res) => {
+   901→    try {
+   902→      const db = (await import('./database/index.js')).default;
+   903→      const authHeader = req.headers.authorization;
+   904→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+   905→      const { verifyToken } = await import('./middleware/auth.js');
+   906→      const payload = verifyToken(authHeader.split(' ')[1]);
+   907→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+   908→      const userId = payload.userId || payload.sub;
+   909→      const { targetUserId, reason, details } = req.body;
+   910→      if (!targetUserId || !reason) { res.status(400).json({ error: 'targetUserId and reason required' }); return; }
+   911→      // Create a complaint post (reuse existing complaints system)
+   912→      const id = crypto.randomBytes(16).toString('hex');
+   913→      const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any;
+   914→      const targetUser = db.prepare('SELECT name FROM users WHERE id = ?').get(targetUserId) as any;
+   915→      db.prepare('INSERT INTO posts (id, author_id, content, type, category, status) VALUES (?, ?, ?, ?, ?, ?)').run(
+   916→        id, userId, `بلاغ ضد ${targetUser?.name || 'مستخدم'}: ${reason}${details ? ' - ' + details : ''}`, 'status', 'complaint', 'active'
+   917→      );
+   918→      // Notify admins (loop over all admin users to avoid FK violation
+   919→      // when no user with id='admin' exists — users use random hex IDs).
+   920→      const notifMsg = `بلاغ جديد من ${user?.name || 'مستخدم'} ضد ${targetUser?.name || 'مستخدم'}`;
+   921→      const admins = db.prepare('SELECT id FROM users WHERE is_admin = 1 AND is_deactivated = 0').all() as any[];
+   922→      const insertNotif = db.prepare('INSERT INTO notifications (id, user_id, type, message) VALUES (?, ?, ?, ?)');
+   923→      for (const admin of admins) {
+   924→        const notifId = crypto.randomBytes(16).toString('hex');
+   925→        insertNotif.run(notifId, admin.id, 'warning', notifMsg);
+   926→        // Also push via WebSocket for real-time admin alert
+   927→        try {
+   928→          const { wsManager } = await import('./websocket/index.js');
+   929→          wsManager.emitNotification(admin.id, {
+   930→            id: notifId,
+   931→            type: 'warning',
+   932→            message: notifMsg,
+   933→            time: new Date().toISOString(),
+   934→            link: '/admin',
+   935→          });
+   936→        } catch {}
+   937→      }
+   938→      res.json({ success: true, id });
+   939→    } catch (err: any) {
+   940→      res.status(500).json({ error: err.message });
+   941→    }
+   942→  });
+   943→
+   944→  // ─── Scheduled Streams API ──────────────────────────────────────────
+   945→  app.get('/api/livestream/scheduled', async (_req, res) => {
+   946→    try {
+   947→      const db = (await import('./database/index.js')).default;
+   948→      const streams = db.prepare(`
+   949→        SELECT ss.*, u.name as user_name, u.avatar as user_avatar
+   950→        FROM scheduled_streams ss
+   951→        JOIN users u ON u.id = ss.user_id
+   952→        WHERE ss.scheduled_at >= datetime('now')
+   953→        ORDER BY ss.scheduled_at ASC
+   954→        LIMIT 50
+   955→      `).all() as any[];
+   956→      res.json(streams);
+   957→    } catch (err: any) { res.status(500).json({ error: err.message }); }
+   958→  });
+   959→
+   960→  app.post('/api/livestream/schedule', async (req, res) => {
+   961→    try {
+   962→      const db = (await import('./database/index.js')).default;
+   963→      const authHeader = req.headers.authorization;
+   964→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+   965→      const { verifyToken } = await import('./middleware/auth.js');
+   966→      const payload = verifyToken(authHeader.split(' ')[1]);
+   967→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+   968→      const userId = payload.userId || payload.sub;
+   969→      const { title, description, scheduledAt, durationMinutes, category } = req.body;
+   970→      if (!title || !scheduledAt) { res.status(400).json({ error: 'title and scheduledAt required' }); return; }
+   971→      const scheduledDate = new Date(scheduledAt);
+   972→      if (scheduledDate <= new Date()) { res.status(400).json({ error: 'يجب أن يكون الموعد في المستقبل' }); return; }
+   973→      const id = crypto.randomBytes(16).toString('hex');
+   974→      db.prepare('INSERT INTO scheduled_streams (id, user_id, title, description, scheduled_at, duration_minutes, category) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+   975→        id, userId, title, description || '', scheduledAt, durationMinutes || 60, category || ''
+   976→      );
+   977→      // Notify friends about scheduled stream
+   978→      try {
+   979→        const { sendPushToUsers } = await import('./services/pushNotifications.js');
+   980→        const friends = db.prepare('SELECT requester_id as fid FROM friendships WHERE addressee_id = ? AND status = ? UNION SELECT addressee_id as fid FROM friendships WHERE requester_id = ? AND status = ?').all(userId, 'accepted', userId, 'accepted') as any[];
+   981→        if (friends.length > 0) {
+   982→          const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId) as any;
+   983→          const friendIds = friends.map((f: any) => f.fid);
+   984→          sendPushToUsers(friendIds, 'بث مباشر مجدول', `${user?.name || 'مستخدم'} جدول بث مباشر: ${title}`, { type: 'livestream', link: `/live-stream/${userId}` }).catch(() => {});
+   985→        }
+   986→      } catch {}
+   987→      res.json({ success: true, id });
+   988→    } catch (err: any) { res.status(500).json({ error: err.message }); }
+   989→  });
+   990→
+   991→  app.post('/api/livestream/schedule/:id/remind', async (req, res) => {
+   992→    try {
+   993→      const db = (await import('./database/index.js')).default;
+   994→      const authHeader = req.headers.authorization;
+   995→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+   996→      const { verifyToken } = await import('./middleware/auth.js');
+   997→      const payload = verifyToken(authHeader.split(' ')[1]);
+   998→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+   999→      const userId = payload.userId || payload.sub;
+  1000→      const streamId = req.params.id;
+  1001→      // Save reminder in stream_reminders table
+  1002→      try {
+  1003→        db.prepare('INSERT OR IGNORE INTO stream_reminders (stream_id, user_id) VALUES (?, ?)').run(streamId, userId);
+  1004→      } catch {}
+  1005→      db.prepare('UPDATE scheduled_streams SET reminder_count = reminder_count + 1 WHERE id = ?').run(streamId);
+  1006→      res.json({ success: true });
+  1007→    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  1008→  });
+  1009→
+  1010→  app.delete('/api/livestream/schedule/:id', async (req, res) => {
+  1011→    try {
+  1012→      const db = (await import('./database/index.js')).default;
+  1013→      const authHeader = req.headers.authorization;
+  1014→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  1015→      const { verifyToken } = await import('./middleware/auth.js');
+  1016→      const payload = verifyToken(authHeader.split(' ')[1]);
+  1017→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+  1018→      const userId = payload.userId || payload.sub;
+  1019→      const streamId = req.params.id;
+  1020→      const stream = db.prepare('SELECT user_id FROM scheduled_streams WHERE id = ?').get(streamId) as any;
+  1021→      if (!stream) { res.status(404).json({ error: 'Not found' }); return; }
+  1022→      if (stream.user_id !== userId && !payload.isAdmin) { res.status(403).json({ error: 'Not your stream' }); return; }
+  1023→      db.prepare('DELETE FROM scheduled_streams WHERE id = ?').run(streamId);
+  1024→      res.json({ success: true });
+  1025→    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  1026→  });
+  1027→
+  1028→  // ─── Stream Gifts/Tips API ──────────────────────────────────────
+  1029→  const GIFT_TYPES = [
+  1030→    { id: 'rose', name: '🌹 وردة', amount: 5 },
+  1031→    { id: 'heart', name: '❤️ قلب', amount: 10 },
+  1032→    { id: 'star', name: '⭐ نجمة', amount: 25 },
+  1033→    { id: 'crown', name: '👑 تاج', amount: 50 },
+  1034→    { id: 'diamond', name: '💎 ألماسة', amount: 100 },
+  1035→    { id: 'rocket', name: '🚀 صاروخ', amount: 200 },
+  1036→  ];
+  1037→
+  1038→  app.get('/api/livestream/gifts', (_req, res) => {
+  1039→    res.json(GIFT_TYPES);
+  1040→  });
+  1041→
+  1042→  app.post('/api/livestream/gift', async (req, res) => {
+  1043→    try {
+  1044→      const db = (await import('./database/index.js')).default;
+  1045→      const authHeader = req.headers.authorization;
+  1046→      if (!authHeader?.startsWith('Bearer ')) { res.status(401).json({ error: 'Unauthorized' }); return; }
+  1047→      const { verifyToken } = await import('./middleware/auth.js');
+  1048→      const payload = verifyToken(authHeader.split(' ')[1]);
+  1049→      if (!payload) { res.status(401).json({ error: 'Invalid token' }); return; }
+  1050→      const userId = payload.userId || payload.sub;
+  1051→      const { streamId, receiverId, giftType, message } = req.body;
+  1052→      if (!streamId || !receiverId || !giftType) { res.status(400).json({ error: 'streamId, receiverId, giftType required' }); return; }
+  1053→
+  1054→      const gift = GIFT_TYPES.find(g => g.id === giftType);
+  1055→      if (!gift) { res.status(400).json({ error: 'Invalid gift type' }); return; }
+  1056→
+  1057→      // Atomic balance check + deduction + receiver credit + gift record + tx records.
+  1058→      // All five operations must either succeed together or fail together so
+  1059→      // we never lose or duplicate money on a partial failure.
+  1060→      const sender = db.prepare('SELECT wallet_balance, name FROM users WHERE id = ?').get(userId) as any;
+  1061→      if (!sender || sender.wallet_balance < gift.amount) { res.status(400).json({ error: 'رصيد غير كافي' }); return; }
+  1062→
+  1063→      const receiverAmount = gift.amount * 0.9;
+  1064→      const giftId = crypto.randomBytes(16).toString('hex');
+  1065→      const txId1 = crypto.randomBytes(16).toString('hex');
+  1066→      const txId2 = crypto.randomBytes(16).toString('hex');
+  1067→      const notifId = crypto.randomBytes(16).toString('hex');
+  1068→
+  1069→      db.transaction(() => {
+  1070→        // Conditional UPDATE: only succeeds if balance is still ≥ amount.
+  1071→        // Closes the race where two concurrent gifts both pass the outer check.
+  1072→        const deductResult = db.prepare(
+  1073→          'UPDATE users SET wallet_balance = wallet_balance - ? WHERE id = ? AND wallet_balance >= ?'
+  1074→        ).run(gift.amount, userId, gift.amount);
+  1075→        if (deductResult.changes === 0) {
+  1076→          throw new Error('INSUFFICIENT_BALANCE');
+  1077→        }
+  1078→        db.prepare('UPDATE users SET wallet_balance = wallet_balance + ? WHERE id = ?').run(receiverAmount, receiverId);
+  1079→
+  1080→        db.prepare('INSERT INTO stream_gifts (id, stream_id, sender_id, receiver_id, gift_type, gift_name, amount, message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(
+  1081→          giftId, streamId, userId, receiverId, giftType, gift.name, gift.amount, message || ''
+  1082→        );
+  1083→
+  1084→        db.prepare('INSERT INTO transactions (id, user_id, type, amount, method, status) VALUES (?, ?, ?, ?, ?, ?)').run(
+  1085→          txId1, userId, 'gift_sent', gift.amount, 'wallet', 'completed'
+  1086→        );
+  1087→        db.prepare('INSERT INTO transactions (id, user_id, type, amount, method, status) VALUES (?, ?, ?, ?, ?, ?)').run(
+  1088→          txId2, receiverId, 'gift_received', receiverAmount, 'wallet', 'completed'
+  1089→        );
+  1090→
+  1091→        db.prepare('INSERT INTO notifications (id, user_id, type, message, link) VALUES (?, ?, ?, ?, ?)').run(
+  1092→          notifId, receiverId, 'payment', `استلمت ${gift.name} من ${sender.name}`, '/wallet'
+  1093→        );
+  1094→      })();
+  1095→
+  1096→      // Notify receiver via WebSocket (outside the transaction).
+  1097→      // Use sendToUser with a raw object (NOT pre-stringified) so the
+  1098→      // WS layer's internal JSON.stringify produces the correct shape.
+  1099→      try {
+  1100→        const { wsManager } = await import('./websocket/index.js');
+  1101→        wsManager.sendToUser(receiverId, {
+  1102→          type: 'livestream:gift',
+  1103→          data: { gift: { id: giftId, giftType, giftName: gift.name, amount: gift.amount, senderName: sender.name, message } }
+  1104→        });
+  1105→      } catch {}
+  1106→
+  1107→      res.json({ success: true, id: giftId, amount: gift.amount, giftName: gift.name });
+  1108→    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  1109→  });
+  1110→
+  1111→  app.get('/api/livestream/:streamId/gifts', async (req, res) => {
+  1112→    try {
+  1113→      const db = (await import('./database/index.js')).default;
+  1114→      const streamId = req.params.streamId;
+  1115→      const gifts = db.prepare(`
+  1116→        SELECT sg.*, u.name as sender_name, u.avatar as sender_avatar
+  1117→        FROM stream_gifts sg
+  1118→        JOIN users u ON u.id = sg.sender_id
+  1119→        WHERE sg.stream_id = ?
+  1120→        ORDER BY sg.created_at DESC
+  1121→        LIMIT 100
+  1122→      `).all(streamId) as any[];
+  1123→      res.json(gifts);
+  1124→    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  1125→  });
+  1126→
+  1127→  app.get('/api/livestream/:streamId/gift-stats', async (req, res) => {
+  1128→    try {
+  1129→      const db = (await import('./database/index.js')).default;
+  1130→      const streamId = req.params.streamId;
+  1131→      const stats = db.prepare(`
+  1132→        SELECT gift_type, gift_name, COUNT(*) as count, SUM(amount) as total_amount
+  1133→        FROM stream_gifts
+  1134→        WHERE stream_id = ?
+  1135→        GROUP BY gift_type
+  1136→        ORDER BY count DESC
+  1137→      `).all(streamId) as any[];
+  1138→      const total = db.prepare('SELECT SUM(amount) as total FROM stream_gifts WHERE stream_id = ?').get(streamId) as any;
+  1139→      res.json({ stats, total: total?.total || 0 });
+  1140→    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  1141→  });
+  1142→
+  1143→  // 7e. API 404 handler (MUST be after all /api/* routes, before Vite catch-all)
+  1144→  app.use('/api', (req, res) => {
+  1145→    console.log(`[404] API route not found: ${req.method} ${req.path}`);
+  1146→    res.status(404).json({ error: 'API endpoint not found', path: req.path, method: req.method });
+  1147→  });
+  1148→
+  1149→  // ════════════════════════════════════════════════════════════════════
+  1150→  // 7f. Social Media Share — Server-side OG meta tags for /post/:id
+  1151→  // ════════════════════════════════════════════════════════════════════
+  1152→  // When a post link is shared on WhatsApp/Facebook/Twitter, their crawlers
+  1153→  // DON'T execute JavaScript. With hash-based routing (/#/post/:id), the
+  1154→  // server only sees '/' and returns the generic index.html — so the share
+  1155→  // preview is empty.
+  1156→  //
+  1157→  // This route (/post/:id — no hash) returns HTML with dynamic Open Graph
+  1158→  // meta tags (title, description, image) for the specific post. Social
+  1159→  // media crawlers will read these tags and show a rich preview.
+  1160→  //
+  1161→  // The HTML includes a redirect to /#/post/:id so real users land on the
+  1162→  // SPA page, while crawlers read the OG tags.
+  1163→  app.get('/post/:id', async (req, res) => {
+  1164→    try {
+  1165→      const postId = req.params.id;
+  1166→      const db = (await import('./database/index.js')).default;
+  1167→
+  1168→      // Get post with author info
+  1169→      const post = db.prepare(`
+  1170→        SELECT p.id, p.content, p.image, p.type, p.price, p.currency, p.created_at,
+  1171→               u.name as author_name, u.avatar, u.avatar_base64
+  1172→        FROM posts p
+  1173→        LEFT JOIN users u ON p.author_id = u.id
+  1174→        WHERE p.id = ? AND p.status = 'active'
+  1175→      `).get(postId) as any;
+  1176→
+  1177→      const origin = `https://${req.headers.host}`;
+  1178→      const appUrl = origin; // Always use the actual host, not APP_URL env
+  1179→
+  1180→      // Default OG values (if post not found)
+  1181→      let ogTitle = 'نواقص | Nawaqes - منصة الإعلانات الذكية';
+  1182→      let ogDescription = 'منصة الإعلانات الذكية الأولى - مساعد ذكاء اصطناعي، محفظة إلكترونية، وسوق متكامل';
+  1183→      let ogImage = `${origin}/icons/og-image.png`;
+  1184→      let ogUrl = `${appUrl}/#/post/${postId}`;
+  1185→
+  1186→      if (post) {
+  1187→        // Build dynamic OG tags from post data
+  1188→        const authorName = post.author_name || 'مستخدم نواقص';
+  1189→        const contentPreview = (post.content || '').slice(0, 200);
+  1190→        const priceText = post.price ? ` — ${post.price} ${post.currency || 'ج.م'}` : '';
+  1191→
+  1192→        ogTitle = `${authorName}${priceText}`;
+  1193→        ogDescription = contentPreview || 'منشور على نواقص';
+  1194→        ogUrl = `${appUrl}/#/post/${postId}`;
+  1195→
+  1196→        // Get first image from post
+  1197→        if (post.image) {
+  1198→          try {
+  1199→            const parsed = JSON.parse(post.image);
+  1200→            const images = Array.isArray(parsed) ? parsed : [post.image];
+  1201→            if (images.length > 0 && images[0]) {
+  1202→              const img = images[0];
+  1203→              ogImage = img.startsWith('http') ? img : `${origin}${img}`;
+  1204→            }
+  1205→          } catch {
+  1206→            if (post.image.startsWith('http')) {
+  1207→              ogImage = post.image;
+  1208→            } else {
+  1209→              ogImage = `${origin}${post.image}`;
+  1210→            }
+  1211→          }
+  1212→        } else if (post.avatar_base64) {
+  1213→          ogImage = post.avatar_base64;
+  1214→        } else if (post.avatar && post.avatar.startsWith('http')) {
+  1215→          ogImage = post.avatar;
+  1216→        }
+  1217→      }
+  1218→
+  1219→      // Return HTML with OG meta tags + redirect for real users
+  1220→      const html = `<!DOCTYPE html>
+  1221→<html lang="ar" dir="rtl">
+  1222→<head>
+  1223→  <meta charset="UTF-8" />
+  1224→  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  1225→
+  1226→  <!-- Open Graph (Facebook, WhatsApp, LinkedIn) -->
+  1227→  <meta property="og:type" content="article" />
+  1228→  <meta property="og:title" content="${ogTitle.replace(/"/g, '&quot;')}" />
+  1229→  <meta property="og:description" content="${ogDescription.replace(/"/g, '&quot;')}" />
+  1230→  <meta property="og:image" content="${ogImage}" />
+  1231→  <meta property="og:url" content="${ogUrl}" />
+  1232→  <meta property="og:site_name" content="نواقص" />
+  1233→  <meta property="og:locale" content="ar_AR" />
+  1234→
+  1235→  <!-- Twitter Card -->
+  1236→  <meta name="twitter:card" content="summary_large_image" />
+  1237→  <meta name="twitter:title" content="${ogTitle.replace(/"/g, '&quot;')}" />
+  1238→  <meta name="twitter:description" content="${ogDescription.replace(/"/g, '&quot;')}" />
+  1239→  <meta name="twitter:image" content="${ogImage}" />
+  1240→
+  1241→  <title>${ogTitle.replace(/</g, '&lt;')}</title>
+  1242→
+  1243→  <!-- Redirect real users to the SPA -->
+  1244→  <script>
+  1245→    window.location.href = '${ogUrl}';
+  1246→  </script>
+  1247→  <meta http-equiv="refresh" content="0;url=${ogUrl}" />
+  1248→</head>
+  1249→<body>
+  1250→  <p>جارٍ التحويل... <a href="${ogUrl}">اضغط هنا</a></p>
+  1251→</body>
+  1252→</html>`;
+  1253→
+  1254→      res.set('Content-Type', 'text/html');
+  1255→      res.send(html);
+  1256→    } catch (err: any) {
+  1257→      console.error('[OG] Post share error:', err.message);
+  1258→      res.redirect(`/#/post/${req.params.id}`);
+  1259→    }
+  1260→  });
+  1261→
+  1262→  // 8. Vite middleware (dev) / Static files (prod)
+  1263→  // This is LAST because it acts as a catch-all for non-API requests
+  1264→  if (isDev) {
+  1265→    const vite = await createViteServer({
+  1266→      root: rootDir,
+  1267→      server: { middlewareMode: true },
+  1268→      appType: 'spa',
+  1269→    });
+  1270→    app.use(vite.middlewares);
+  1271→  } else {
+  1272→    // Production: serve built frontend from dist/client
+  1273→    const clientPath = path.resolve(rootDir, 'dist', 'client');
+  1274→    // Fallback to dist/ if dist/client doesn't exist (local builds)
+  1275→    const distPath = fs.existsSync(clientPath) ? clientPath : path.resolve(rootDir, 'dist');
+  1276→    console.log(`[PROD] Serving static files from: ${distPath}`);
+  1277→    app.use(express.static(distPath, {
+  1278→      maxAge: '1d',
+  1279→      etag: true,
+  1280→      lastModified: true,
+  1281→      // index.html should NOT be cached — it references the latest
+  1282→      // hashed JS bundle. Cached HTML = stale content after deploys.
+  1283→      setHeaders: (res, filePath) => {
+  1284→        if (filePath.endsWith('.html')) {
+  1285→          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  1286→          res.setHeader('Pragma', 'no-cache');
+  1287→          res.setHeader('Expires', '0');
+  1288→        }
+  1289→      },
+  1290→    }));
+  1291→
+  1292→    // SPA fallback: only for routes that don't match a static file
+  1293→    // Excludes: /api/*, /download/*, /uploads/*, /get-app, /health
+  1294→    app.get('*', (req, res, next) => {
+  1295→      // Skip API and known paths
+  1296→      if (req.path.startsWith('/api/') ||
+  1297→          req.path.startsWith('/download/') ||
+  1298→          req.path.startsWith('/uploads/') ||
+  1299→          req.path === '/get-app' ||
+  1300→          req.path === '/health' ||
+  1301→          req.path === '/manifest.webmanifest' ||
+  1302→          req.path === '/sw.js' ||
+  1303→          req.path === '/offline.html' ||
+  1304→          req.path.startsWith('/icons/')) {
+  1305→        return next();
+  1306→      }
+  1307→      // CRITICAL: index.html must NEVER be cached — it contains the
+  1308→      // reference to the latest hashed JS bundle. If cached, users
+  1309→      // see stale content after deploys.
+  1310→      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  1311→      res.setHeader('Pragma', 'no-cache');
+  1312→      res.setHeader('Expires', '0');
+  1313→      res.sendFile(path.join(distPath, 'index.html'));
+  1314→    });
+  1315→  }
+  1316→
+  1317→  // General error handler
+  1318→  app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  1319→    console.error(`[ERROR] ${req.method} ${req.path}:`, err.message);
+  1320→    res.status(err.status || 500).json({
+  1321→      error: isDev ? err.message : 'Internal server error',
+  1322→      ...(isDev && { stack: err.stack }),
+  1323→    });
+  1324→  });
+  1325→
+  1326→  // --- Create HTTP server and attach WebSocket ---
+  1327→  const server = createHttpServer(app);
+  1328→
+  1329→  // 🔒 Dynamic import here (after env loaded + DB initialized) to avoid
+  1330→  // pulling database/index.ts into the module graph before dotenv.config().
+  1331→  const { wsManager } = await import('./websocket/index.js');
+  1332→
+  1333→  // Initialize WebSocket server
+  1334→  wsManager.initialize(server);
+  1335→
+  1336→  // Make wsManager available to route handlers via app.locals
+  1337→  app.locals.wsManager = wsManager;
+  1338→
+  1339→  // --- Start Server ---
+  1340→  server.listen(PORT, '0.0.0.0', async () => {
+  1341→    console.log('');
+  1342→    console.log('================================================');
+  1343→    console.log(`  Nawaqes Server running on http://localhost:${PORT}`);
+  1344→    console.log(`  Environment: ${process.env.NODE_ENV || 'development'}`);
+  1345→    console.log(`  Health: http://localhost:${PORT}/api/health`);
+  1346→    console.log(`  WebSocket: ws://localhost:${PORT}/ws`);
+  1347→    console.log('================================================');
+  1348→    console.log('');
+  1349→
+  1350→    if (isDev) {
+  1351→      console.log('[DEV] Vite HMR is active. Rate limit: 500/10s.');
+  1352→    } else {
+  1353→      console.log('[PROD] Security headers enabled. Rate limit: 100/min.');
+  1354→      console.log('[PROD] JWT_SECRET: ✅ Configured');
+  1355→      console.log('[PROD] HSTS: ✅ Enabled');
+  1356→    }
+  1357→
+  1358→    // 🔧 Initialize auto-backup system
+  1359→    try {
+  1360→      const { initAutoBackup, createManualBackup, getBackupStats, createEventBackup, backupUploadsToHF } = await import('./database/backup-system.js');
+  1361→      const { authMiddleware: authMid } = await import('./middleware/auth.js');
+  1362→      initAutoBackup();
+  1363→
+  1364→      // ─── Chat v2 cron jobs ───────────────────────────────────────
+  1365→      // 1. Delete expired (disappearing) messages every 30 seconds
+  1366→      // 2. Publish scheduled messages every 30 seconds
+  1367→      setInterval(async () => {
+  1368→        try {
+  1369→          const dbMod = (await import('./database/index.js')).default;
+  1370→          // Delete expired messages
+  1371→          const expired = dbMod.prepare("DELETE FROM chat_messages WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')").run();
+  1372→          if (expired.changes > 0) console.log(`[CHAT] Deleted ${expired.changes} expired messages`);
+  1373→          // Publish scheduled messages
+  1374→          const due = dbMod.prepare("SELECT * FROM chat_messages WHERE is_scheduled = 1 AND scheduled_at <= datetime('now')").all() as any[];
+  1375→          for (const msg of due) {
+  1376→            dbMod.prepare('UPDATE chat_messages SET is_scheduled = 0 WHERE id = ?').run(msg.id);
+  1377→            try {
+  1378→              const { wsManager } = await import('./websocket/index.js');
+  1379→              if (msg.group_id) {
+  1380→                wsManager.broadcast({ type: 'chat:message', data: { ...msg, is_scheduled: 0 } });
+  1381→              } else if (msg.receiver_id) {
+  1382→                wsManager.sendToUser(msg.receiver_id, { type: 'chat:message', data: { ...msg, is_scheduled: 0 } });
+  1383→              }
+  1384→            } catch {}
+  1385→          }
+  1386→          if (due.length > 0) console.log(`[CHAT] Published ${due.length} scheduled messages`);
+  1387→        } catch {}
+  1388→      }, 30000);
+  1389→
+  1390→      // Manual backup endpoint (admin only)
+  1391→      app.post('/api/admin/backup', authMid, async (req: express.Request, res: express.Response) => {
+  1392→        try {
+  1393→          const payload = (req as any).user as any;
+  1394→          if (!payload.isAdmin) { res.status(403).json({ error: 'ممنوع' }); return; }
+  1395→          createManualBackup();
+  1396→          res.json({ success: true, message: 'تم إنشاء نسخة احتياطية' });
+  1397→        } catch (err: any) {
+  1398→          res.status(500).json({ error: 'فشل النسخ الاحتياطي', details: err.message });
+  1399→        }
+  1400→      });
+  1401→
+  1402→      // Backup stats endpoint (admin only)
+  1403→      app.get('/api/admin/backup-stats', authMid, async (req: express.Request, res: express.Response) => {
+  1404→        try {
+  1405→          const payload = (req as any).user as any;
+  1406→          if (!payload.isAdmin) { res.status(403).json({ error: 'ممنوع' }); return; }
+  1407→          res.json(getBackupStats());
+  1408→        } catch (err: any) {
+  1409→          res.status(500).json({ error: 'فشل جلب الإحصائيات', details: err.message });
+  1410→        }
+  1411→      });
+  1412→
+  1413→      // 🔒 RADICAL FIX: Manual uploads backup endpoint (admin only)
+  1414→      // Backs up ALL files in /data/uploads to HF Dataset immediately.
+  1415→      // Use this after server restart to ensure all existing images are safe.
+  1416→      app.post('/api/admin/backup-uploads', authMid, async (req: express.Request, res: express.Response) => {
+  1417→        try {
+  1418→          const payload = (req as any).user as any;
+  1419→          if (!payload.isAdmin) { res.status(403).json({ error: 'ممنوع' }); return; }
+  1420→          // Run in background — don't block the response
+  1421→          res.json({ success: true, message: 'بدأ النسخ الاحتياطي للصور في الخلفية' });
+  1422→          backupUploadsToHF();
+  1423→        } catch (err: any) {
+  1424→          res.status(500).json({ error: 'فشل النسخ الاحتياطي', details: err.message });
+  1425→        }
+  1426→      });
+  1427→
+  1428→      // Save .env to persistent storage so it survives rebuilds
+  1429→      app.post('/api/admin/persist-env', authMid, async (req: express.Request, res: express.Response) => {
+  1430→        try {
+  1431→          const payload = (req as any).user as any;
+  1432→          if (!payload.isAdmin) { res.status(403).json({ error: 'ممنوع' }); return; }
+  1433→          const fs2 = await import('fs');
+  1434→          const envPath = path.resolve(process.cwd(), '.env');
+  1435→          const persistentEnvPath = '/data/.env';
+  1436→          if (fs2.existsSync(envPath)) {
+  1437→            fs2.copyFileSync(envPath, persistentEnvPath);
+  1438→            res.json({ success: true, message: 'تم حفظ الإعدادات بشكل دائم' });
+  1439→          } else {
+  1440→            res.status(404).json({ error: 'ملف .env غير موجود' });
+  1441→          }
+  1442→        } catch (err: any) {
+  1443→          res.status(500).json({ error: 'فشل حفظ الإعدادات', details: err.message });
+  1444→        }
+  1445→      });
+  1446→
+  1447→    } catch (err: any) {
+  1448→      console.warn('[BACKUP] Init failed:', err.message);
+  1449→    }
+  1450→  });
+  1451→}
+  1452→
+  1453→startServer().catch((err) => {
+  1454→  console.error('[STARTUP] Failed to start server:', err);
+  1455→  process.exit(1);
+  1456→});
+  1457→

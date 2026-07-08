@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#DC2626" />
+  <title>تحميل تطبيق نواقص | Nawaqes - منصة الإعلانات الذكية</title>
+  <meta name="description" content="حمّل تطبيق نواقص - منصة الإعلانات الذكية الأولى في الوطن العربي. مساعد ذكاء اصطناعي، محفظة إلكترونية، وسوق متكامل." />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="نواقص | Nawaqes" />
+  <meta property="og:description" content="منصة الإعلانات الذكية الأولى - حمّل التطبيق الآن" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="/icons/og-image.png" />
+  <meta property="og:locale" content="ar_AR" />
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #DC2626;
+      --primary-dark: #B91C1C;
+      --accent: #F59E0B;
+      --accent-light: #FBC02D;
+      --dark: #1e0c0c;
+      --darker: #0d0606;
+      --white: #ffffff;
+      --gray: #6b7280;
+      --light-gray: #f3f4f6;
+      --shadow-lg: 0 20px 60px rgba(0,0,0,0.15);
+      --shadow-md: 0 10px 30px rgba(0,0,0,0.1);
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, 'Noto Sans Arabic', sans-serif;
+      background: linear-gradient(135deg, #1e0c0c 0%, #2d1212 50%, #1e0c0c 100%);
+      color: var(--white);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.7;
+    }
+
+    /* ===== Animated background ===== */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      right: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 30% 50%, rgba(220,38,38,0.15), transparent 50%),
+                  radial-gradient(circle at 70% 30%, rgba(245,158,11,0.1), transparent 50%);
+      animation: float 20s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 0;
+    }
+    @keyframes float {
+      0%, 100% { transform: translate(0,0) rotate(0deg); }
+      50% { transform: translate(-30px,-30px) rotate(5deg); }
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+    }
+
+    /* ===== Header ===== */
+    .header {
+      padding: 1.5rem 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo-mark {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.4rem;
+      font-weight: 800;
+    }
+    .logo-icon {
+      width: 50px;
+      height: 50px;
+      background: linear-gradient(135deg, var(--accent-light), var(--primary));
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 1.5rem;
+      font-weight: bold;
+      box-shadow: 0 8px 24px rgba(220,38,38,0.4);
+    }
+    .nav-links { display: flex; gap: 1.5rem; }
+    .nav-links a {
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      font-size: 0.95rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--accent-light); }
+    @media (max-width: 768px) { .nav-links { display: none; } }
+
+    /* ===== Hero ===== */
+    .hero {
+      padding: 4rem 0 3rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      align-items: center;
+    }
+    @media (max-width: 968px) {
+      .hero { grid-template-columns: 1fr; text-align: center; gap: 2rem; padding: 2rem 0; }
+    }
+
+    .hero-content h1 {
+      font-size: 3.2rem;
+      font-weight: 900;
+      line-height: 1.2;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent), var(--primary));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    @media (max-width: 768px) { .hero-content h1 { font-size: 2.2rem; } }
+    .hero-content p.tagline {
+      font-size: 1.3rem;
+      margin-bottom: 1.5rem;
+      color: rgba(255,255,255,0.9);
+    }
+    .hero-content p.description {
+      font-size: 1.05rem;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 2rem;
+    }
+
+    .download-buttons {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 768px) { .download-buttons { justify-content: center; } }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 1rem 1.8rem;
+      border-radius: 14px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 1.05rem;
+      transition: all 0.3s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      box-shadow: 0 10px 30px rgba(220,38,38,0.5);
+    }
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 15px 40px rgba(220,38,38,0.6);
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      border: 2px solid rgba(255,255,255,0.2);
+      backdrop-filter: blur(10px);
+    }
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.15);
+      border-color: var(--accent);
+    }
+    .btn-icon { font-size: 1.4rem; }
+
+    .stats {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 768px) { .stats { justify-content: center; } }
+    .stat strong {
+      display: block;
+      font-size: 1.8rem;
+      color: var(--accent-light);
+      font-weight: 800;
+    }
+    .stat span {
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+    }
+
+    /* ===== Phone mockup ===== */
+    .phone-mockup {
+      position: relative;
+      width: 320px;
+      height: 640px;
+      margin: 0 auto;
+      background: linear-gradient(135deg, #2a2a2a, #1a1a1a);
+      border-radius: 50px;
+      padding: 12px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.5),
+                  inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .phone-mockup::before {
+      content: '';
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110px;
+      height: 24px;
+      background: #1a1a1a;
+      border-radius: 14px;
+      z-index: 2;
+    }
+    .phone-screen {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(180deg, var(--primary) 0%, var(--dark) 60%);
+      border-radius: 40px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .phone-screen .logo-big {
+      width: 120px;
+      height: 120px;
+      background: white;
+      border-radius: 30%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+      font-size: 3rem;
+      font-weight: bold;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+    }
+    .phone-screen h2 { font-size: 2rem; margin-bottom: 0.5rem; }
+    .phone-screen p { color: rgba(255,255,255,0.7); font-size: 0.9rem; }
+    @media (max-width: 968px) { .phone-mockup { display: none; } }
+
+    /* ===== Features ===== */
+    .features {
+      padding: 4rem 0;
+      text-align: center;
+    }
+    .section-title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+    }
+    .section-subtitle {
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 3rem;
+      font-size: 1.1rem;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+    }
+    .feature-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 2rem;
+      border-radius: 20px;
+      text-align: right;
+      transition: all 0.3s;
+      backdrop-filter: blur(10px);
+    }
+    .feature-card:hover {
+      transform: translateY(-5px);
+      background: rgba(255,255,255,0.08);
+      border-color: var(--accent);
+    }
+    .feature-icon {
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+    }
+    .feature-card h3 { font-size: 1.3rem; margin-bottom: 0.5rem; }
+    .feature-card p { color: rgba(255,255,255,0.7); font-size: 0.95rem; }
+
+    /* ===== Download section ===== */
+    .download-section {
+      padding: 5rem 0;
+      text-align: center;
+    }
+    .download-card {
+      background: linear-gradient(135deg, rgba(220,38,38,0.1), rgba(245,158,11,0.05));
+      border: 2px solid rgba(245,158,11,0.2);
+      border-radius: 30px;
+      padding: 3rem 2rem;
+      max-width: 800px;
+      margin: 0 auto;
+      backdrop-filter: blur(20px);
+    }
+    .download-card h2 {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent));
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .download-card p {
+      color: rgba(255,255,255,0.8);
+      margin-bottom: 2rem;
+      font-size: 1.1rem;
+    }
+    .download-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+    .download-option {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 18px;
+      padding: 1.5rem;
+      transition: all 0.3s;
+      text-decoration: none;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .download-option:hover {
+      background: rgba(220,38,38,0.2);
+      border-color: var(--primary);
+      transform: translateY(-3px);
+    }
+    .download-option .icon { font-size: 2.5rem; }
+    .download-option .title { font-weight: 700; font-size: 1.1rem; }
+    .download-option .meta { font-size: 0.85rem; color: rgba(255,255,255,0.6); }
+
+    .badge {
+      display: inline-block;
+      padding: 0.3rem 0.8rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent-light));
+      color: var(--dark);
+      border-radius: 50px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      margin-bottom: 1rem;
+    }
+
+    /* ===== Instructions ===== */
+    .instructions {
+      background: rgba(255,255,255,0.03);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-top: 2rem;
+      text-align: right;
+    }
+    .instructions h4 {
+      color: var(--accent-light);
+      margin-bottom: 1rem;
+      font-size: 1.1rem;
+    }
+    .instructions ol {
+      list-style: none;
+      counter-reset: step;
+    }
+    .instructions li {
+      counter-increment: step;
+      padding: 0.5rem 2rem 0.5rem 0;
+      position: relative;
+      color: rgba(255,255,255,0.8);
+      font-size: 0.95rem;
+    }
+    .instructions li::before {
+      content: counter(step);
+      position: absolute;
+      right: 0;
+      top: 0.5rem;
+      width: 24px;
+      height: 24px;
+      background: var(--primary);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      font-weight: bold;
+    }
+
+    /* ===== Footer ===== */
+    .footer {
+      padding: 3rem 0 2rem;
+      text-align: center;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      margin-top: 3rem;
+    }
+    .footer p { color: rgba(255,255,255,0.6); font-size: 0.9rem; }
+    .footer .links { margin-bottom: 1rem; }
+    .footer .links a {
+      color: rgba(255,255,255,0.7);
+      margin: 0 1rem;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .footer .links a:hover { color: var(--accent-light); }
+
+    /* ===== Floating install button (PWA) ===== */
+    .floating-install {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      padding: 0.9rem 1.5rem;
+      border-radius: 50px;
+      box-shadow: 0 10px 30px rgba(220,38,38,0.5);
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 1rem;
+      z-index: 100;
+      display: none;
+      animation: slideUp 0.3s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    /* ===== QR code ===== */
+    .qr-section {
+      margin-top: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .qr-section img {
+      background: white;
+      padding: 12px;
+      border-radius: 12px;
+      width: 140px;
+      height: 140px;
+    }
+    .qr-section span { font-size: 0.85rem; color: rgba(255,255,255,0.6); }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ============ Header ============ -->
+    <header class="header">
+      <div class="logo-mark">
+        <div class="logo-icon">ن</div>
+        <span>نواقص</span>
+      </div>
+      <nav class="nav-links">
+        <a href="#features">المميزات</a>
+        <a href="#download">تحميل</a>
+        <a href="/login">تسجيل الدخول</a>
+      </nav>
+    </header>
+
+    <!-- ============ Hero ============ -->
+    <section class="hero">
+      <div class="hero-content">
+        <span class="badge">منصة الإعلانات الذكية #1</span>
+        <h1>نواقص</h1>
+        <p class="tagline">منصة الإعلانات الذكية الأولى في الوطن العربي</p>
+        <p class="description">
+          تطبيق متكامل يجمع بين الذكاء الاصطناعي للترويج، المحفظة الإلكترونية،
+          السوق الإلكتروني، والرسائل المباشرة. صُمم خصيصاً للمستخدم العربي بدعم
+          كامل للغة العربية والاتجاه من اليمين لليسار.
+        </p>
+
+        <div class="download-buttons">
+          <a href="#download" class="btn btn-primary">
+            <span class="btn-icon">📱</span>
+            تحميل التطبيق
+          </a>
+          <a href="/" class="btn btn-secondary">
+            <span class="btn-icon">🌐</span>
+            فتح النسخة Web
+          </a>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <strong>+10K</strong>
+            <span>مستخدم نشط</span>
+          </div>
+          <div class="stat">
+            <strong>+50K</strong>
+            <span>إعلان منشور</span>
+          </div>
+          <div class="stat">
+            <strong>4.8★</strong>
+            <span>تقييم المستخدمين</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-mockup">
+        <div class="phone-screen">
+          <div class="logo-big">ن</div>
+          <h2>نواقص</h2>
+          <p>منصة الإعلانات الذكية</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Features ============ -->
+    <section class="features" id="features">
+      <h2 class="section-title">لماذا نواقص؟</h2>
+      <p class="section-subtitle">مميزات تجعلنا الخيار الأول للإعلانات الذكية</p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🧠</div>
+          <h3>مساعد الذكاء الاصطناعي</h3>
+          <p>اقتراحات ترويج ذكية واستهداف تلقائي للجمهور المناسب باستخدام أحدث تقنيات AI.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💰</div>
+          <h3>محفظة إلكترونية</h3>
+          <p>شحن الرصيد ودفع تكاليف الترويج بسهولة وأمان مع تاريخ كامل للمعاملات.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🏪</div>
+          <h3>سوق إلكتروني متكامل</h3>
+          <p>نشر وإدارة الإعلانات بسهولة، مع بحث متقدم وفلاتر ذكية وتصنيفات منظمة.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>تحليلات متقدمة</h3>
+          <p>متابعة أداء الترويج والوصول بإحصائيات تفصيلية ورسوم بيانية تفاعلية.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💬</div>
+          <h3>رسائل مباشرة</h3>
+          <p>تواصل فوري بين المستخدمين مع إشعارات لحظية ودعم كامل للوسائط المتعددة.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🌐</div>
+          <h3>دعم ثنائي اللغة</h3>
+          <p>واجهة عربية وإنجليزية مع دعم كامل للـ RTL، ووضع داكن لمزيد من الراحة.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Download ============ -->
+    <section class="download-section" id="download">
+      <div class="download-card">
+        <span class="badge">تحميل مجاني</span>
+        <h2>حمّل التطبيق الآن</h2>
+        <p>اختر الطريقة المناسبة لك للتحميل — جميع الخيارات مجانية تماماً</p>
+
+        <div class="download-options">
+          <!-- Main APK direct download -->
+          <a href="https://huggingface.co/datasets/safwatkhokha/nawaqes-backup/resolve/main/nawaqes-v1.2.1.apk" class="download-option" download>
+            <span class="icon">📦</span>
+            <span class="title">تطبيق نواقص</span>
+            <span class="meta">التطبيق الكامل • Android 7+</span>
+          </a>
+
+          <!-- Chat APK direct download -->
+          <a href="https://huggingface.co/datasets/safwatkhokha/nawaqes-backup/resolve/main/nawaqes-chat-v1.3.1.apk" class="download-option" download style="border-color: rgba(59,130,246,0.5); background: linear-gradient(135deg, rgba(37,99,235,0.15), rgba(59,130,246,0.05));">
+            <span class="icon">💬</span>
+            <span class="title">نواقص دردشة</span>
+            <span class="meta">v1.2.2 — إشعارات عند القفل</span>
+          </a>
+
+          <!-- PWA install -->
+          <a href="/" class="download-option" id="pwa-install">
+            <span class="icon">🌐</span>
+            <span class="title">تثبيت PWA</span>
+            <span class="meta">يعمل على جميع الأجهزة</span>
+          </a>
+
+          <!-- QR code for main app -->
+          <div class="download-option" style="cursor:default">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://huggingface.co/datasets/safwatkhokha/nawaqes-backup/resolve/main/nawaqes-v1.2.1.apk"
+                 alt="QR Code"
+                 style="background:white;padding:8px;border-radius:8px;width:80px;height:80px">
+            <span class="title">امسح للتحميل</span>
+            <span class="meta">تطبيق نواقص</span>
+          </div>
+
+          <!-- QR code for chat app -->
+          <div class="download-option" style="cursor:default; border-color: rgba(59,130,246,0.3);">
+            <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https://huggingface.co/datasets/safwatkhokha/nawaqes-backup/resolve/main/nawaqes-chat-v1.3.1.apk&color=2563EB"
+                 alt="QR Code Chat"
+                 style="background:white;padding:8px;border-radius:8px;width:80px;height:80px">
+            <span class="title">امسح للدردشة</span>
+            <span class="meta">نواقص دردشة v1.2.0</span>
+          </div>
+        </div>
+
+        <!-- Installation instructions -->
+        <div class="instructions">
+          <h4>📋 طريقة تثبيت APK على الأندرويد:</h4>
+          <ol>
+            <li>اختر التطبيق المناسب: <b>تطبيق نواقص</b> (الكامل) أو <b>نواقص دردشة</b> (للدردشة فقط)</li>
+            <li>اضغط على الزر بالأعلى لبدء التحميل</li>
+            <li>بعد اكتمال التحميل، افتح الملف من مجلد التنزيلات</li>
+            <li>إذا ظهر تحذير "تطبيق غير معروف"، اضغط "السماح من هذا المصدر"</li>
+            <li>اضغط "تثبيت" وانتظر حتى الانتهاء</li>
+            <li>افتح التطبيق واستمتع!</li>
+          </ol>
+          <p style="margin-top:10px; padding:10px; background:rgba(59,130,246,0.1); border-radius:8px; font-size:0.85rem;">
+            💡 <b>نصيحة:</b> يمكنك تثبيت كلا التطبيقين معاً على نفس الجهاز — لا يوجد تعارض.
+            استخدم <b>نواقص</b> لكل شيء (إعلانات، سوق، بث مباشر) و<b>نواقص دردشة</b> للرسائل السريعة.
+          </p>
+        </div>
+
+        <div class="instructions" style="margin-top:1rem">
+          <h4>🌐 طريقة تثبيت PWA (بدون APK):</h4>
+          <ol>
+            <li>افتح موقع نواقص في متصفح Chrome أو Safari على الجوال</li>
+            <li>اضغط على قائمة المتصفح (النقاط الثلاث أو زر المشاركة)</li>
+            <li>اختر "إضافة إلى الشاشة الرئيسية" أو "تثبيت التطبيق"</li>
+            <li>سيظهر أيقونة نواقص على شاشتك الرئيسية كأي تطبيق آخر</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Footer ============ -->
+    <footer class="footer">
+      <div class="links">
+        <a href="/help">المساعدة</a>
+        <a href="/privacy">سياسة الخصوصية</a>
+        <a href="/terms">الشروط والأحكام</a>
+        <a href="/contact">تواصل معنا</a>
+      </div>
+      <p>© 2026 نواقص | Nawaqes — جميع الحقوق محفوظة</p>
+    </footer>
+  </div>
+
+  <button class="floating-install" id="floatingInstall" onclick="installPWA()">
+    ⬇️ تثبيت التطبيق
+  </button>
+
+  <script>
+    // PWA install prompt
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById('floatingInstall').style.display = 'block';
+    });
+
+    async function installPWA() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+          console.log('User accepted PWA install');
+        }
+        deferredPrompt = null;
+        document.getElementById('floatingInstall').style.display = 'none';
+      } else {
+        // Fallback: redirect to home
+        window.location.href = '/';
+      }
+    }
+
+    // Check if already installed (PWA mode)
+    if (window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true) {
+      document.getElementById('floatingInstall').style.display = 'none';
+    }
+
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          e.preventDefault();
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    });
+  </script>
+</body>
+</html>

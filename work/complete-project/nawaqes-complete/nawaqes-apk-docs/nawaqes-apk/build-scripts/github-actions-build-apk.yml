@@ -1,0 +1,132 @@
+# =====================================================
+# Nawaqes — APK Build via GitHub Actions
+# =====================================================
+# This workflow builds the APK on every push to main branch.
+# Upload the APK as a release artifact that users can download directly.
+# =====================================================
+
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for creating releases
+
+    steps:
+      # ---- 1. Checkout code ----
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      # ---- 2. Setup Node.js ----
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ---- 3. Setup Java JDK 17 ----
+      - name: ☕ Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # ---- 4. Setup Android SDK ----
+      - name: 📱 Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools build-tools;34.0.0 platforms;android-34'
+
+      # ---- 5. Install dependencies ----
+      - name: 📦 Install dependencies
+        run: npm install --no-audit --no-fund
+
+      # ---- 6. Build web assets (Capacitor mode) ----
+      - name: 🔨 Build web assets
+        env:
+          CAPACITOR_BUILD: 'true'
+        run: npm run build:web
+
+      # ---- 7. Add Android platform ----
+      - name: 📱 Add Android platform
+        run: |
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+
+      # ---- 8. Copy custom resources ----
+      - name: 📋 Copy custom Android resources
+        run: |
+          # Download the apk-source resources (or copy from a repo subfolder)
+          if [ -d apk-source ]; then
+            cp -f apk-source/AndroidManifest.xml android/app/src/main/AndroidManifest.xml || true
+            cp -rf apk-source/src/com android/app/src/main/java/com || true
+            cp -rn apk-source/res/* android/app/src/main/res/ 2>/dev/null || true
+            cp -f apk-source/build.gradle android/app/build.gradle || true
+          fi
+
+      # ---- 9. Setup google-services.json (from secrets) ----
+      - name: 🔥 Setup Firebase config
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" | base64 -d > android/app/google-services.json
+            echo "google-services.json written"
+          else
+            echo "Warning: GOOGLE_SERVICES_JSON secret not set — FCM will not work"
+          fi
+
+      # ---- 10. Sync Capacitor ----
+      - name: 🔄 Sync Capacitor
+        run: npx cap sync android
+
+      # ---- 11. Build APK ----
+      - name: 🔨 Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      # ---- 12. Sign APK (optional, with debug key for now) ----
+      - name: ✍️ Sign APK
+        uses: r0adkll/sign-android-release@v1
+        id: sign_apk
+        with:
+          releaseDirectory: android/app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        env:
+          # If no keystore secret is set, fall back to debug signing
+          BUILD_TOOLS_VERSION: '34.0.0'
+
+      # ---- 13. Upload artifact ----
+      - name: 📤 Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nawaqes-apk
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/debug/*.apk
+          retention-days: 90
+
+      # ---- 14. Create GitHub Release (on tag) ----
+      - name: 🏷️ Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/apk/debug/*.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

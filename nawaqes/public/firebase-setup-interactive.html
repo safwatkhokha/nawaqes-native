@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#DC2626" />
+  <title>إعداد Firebase | نواقص</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, 'Noto Sans Arabic', sans-serif;
+      background: linear-gradient(135deg, #1e0c0c 0%, #2d1212 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 1.5rem;
+      line-height: 1.8;
+    }
+    .container { max-width: 1000px; margin: 0 auto; padding: 2rem 0; }
+    .header { text-align: center; margin-bottom: 2rem; }
+    .logo {
+      width: 80px; height: 80px;
+      margin: 0 auto 1rem;
+      background: linear-gradient(135deg, #FBC02D, #DC2626);
+      border-radius: 20%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.5rem; color: white; font-weight: bold;
+      box-shadow: 0 10px 30px rgba(220,38,38,0.4);
+    }
+    h1 {
+      font-size: 2rem;
+      background: linear-gradient(135deg, #FBC02D, #F59E0B);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle { color: rgba(255,255,255,0.7); }
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .tab {
+      padding: 0.6rem 1.2rem;
+      background: rgba(255,255,255,0.05);
+      border: 2px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.7);
+      border-radius: 50px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .tab.active, .tab:hover {
+      background: linear-gradient(135deg, #DC2626, #B91C1C);
+      color: white;
+      border-color: #DC2626;
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .section {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(10px);
+    }
+    .section h2 {
+      color: #FBC02D;
+      margin-bottom: 1rem;
+      font-size: 1.2rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .field {
+      margin: 1rem 0;
+    }
+    .field label {
+      display: block;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 0.4rem;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .field label .hint {
+      color: rgba(255,255,255,0.5);
+      font-weight: normal;
+      font-size: 0.85rem;
+    }
+    .field input, .field textarea {
+      width: 100%;
+      padding: 0.8rem 1rem;
+      background: rgba(0,0,0,0.3);
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      color: #FBC02D;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+      direction: ltr;
+      text-align: left;
+    }
+    .field input:focus, .field textarea:focus {
+      outline: none;
+      border-color: #DC2626;
+      background: rgba(0,0,0,0.5);
+    }
+    .field textarea { min-height: 100px; resize: vertical; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.9rem 1.5rem;
+      background: linear-gradient(135deg, #DC2626, #B91C1C);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 1rem;
+      transition: all 0.2s;
+      text-decoration: none;
+      margin: 0.3rem;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(220,38,38,0.4); }
+    .btn-secondary { background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); }
+    .btn-success { background: linear-gradient(135deg, #16a34a, #15803d); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .alert {
+      padding: 1rem;
+      border-radius: 10px;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    .alert-info { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); }
+    .alert-success { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; }
+    .alert-warning { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #FBC02D; }
+    .alert-error { background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.3); color: #fca5a5; }
+
+    .step {
+      background: rgba(220,38,38,0.05);
+      border-right: 4px solid #DC2626;
+      padding: 0.8rem 1.2rem;
+      margin: 0.8rem 0;
+      border-radius: 8px;
+    }
+    .step-num {
+      display: inline-block;
+      width: 24px; height: 24px;
+      background: linear-gradient(135deg, #DC2626, #B91C1C);
+      color: white;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 24px;
+      font-weight: bold;
+      font-size: 0.8rem;
+      margin-left: 0.5rem;
+    }
+    .code {
+      background: #0d0606;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      color: #4ade80;
+      overflow-x: auto;
+      margin: 0.5rem 0;
+      direction: ltr;
+      text-align: left;
+      white-space: pre;
+    }
+    .progress-bar {
+      background: rgba(255,255,255,0.1);
+      border-radius: 50px;
+      height: 8px;
+      overflow: hidden;
+      margin: 1rem 0;
+    }
+    .progress-fill {
+      background: linear-gradient(90deg, #DC2626, #FBC02D);
+      height: 100%;
+      transition: width 0.5s;
+      width: 0%;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 50px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-right: 0.5rem;
+    }
+    .status-pending { background: rgba(245, 158, 11, 0.2); color: #FBC02D; }
+    .status-done { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+    a { color: #FBC02D; }
+    .footer { text-align: center; margin-top: 3rem; color: rgba(255,255,255,0.5); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">🔥</div>
+      <h1>إعداد Firebase تلقائياً</h1>
+      <p class="subtitle">أدخل بيانات Firebase — وسنطبقها تلقائياً على التطبيق ونبني APK جديد</p>
+    </div>
+
+    <!-- Progress -->
+    <div class="section">
+      <h2>📊 تقدم الإعداد</h2>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      <div id="progressText" style="text-align: center; color: rgba(255,255,255,0.7); font-size: 0.9rem;">0% مكتمل</div>
+      <div style="margin-top: 1rem; font-size: 0.9rem;">
+        <div><span class="status-badge status-pending" id="status1">1</span> بيانات Web App (firebaseConfig)</div>
+        <div><span class="status-badge status-pending" id="status2">2</span> ملف google-services.json</div>
+        <div><span class="status-badge status-pending" id="status3">3</span> VAPID Key للـ Web Push</div>
+        <div><span class="status-badge status-pending" id="status4">4</span> Service Account JSON (لإرسال الإشعارات)</div>
+        <div><span class="status-badge status-pending" id="status5">5</span> تطبيق البيانات وبناء APK</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="showTab(0)">📋 التعليمات</button>
+      <button class="tab" onclick="showTab(1)">🔐 بيانات Firebase</button>
+      <button class="tab" onclick="showTab(2)">📦 google-services.json</button>
+      <button class="tab" onclick="showTab(3)">🔔 VAPID Key</button>
+      <button class="tab" onclick="showTab(4)">⚙️ Service Account</button>
+      <button class="tab" onclick="showTab(5)">🚀 تطبيق وبناء</button>
+    </div>
+
+    <!-- Tab 0: Instructions -->
+    <div class="tab-content active" id="tab0">
+      <div class="section">
+        <h2>📋 خطوات إنشاء مشروع Firebase</h2>
+        <div class="alert alert-info">
+          💡 اتبع الخطوات بالترتيب. كل خطوة تأخذ 1-2 دقيقة فقط.
+        </div>
+
+        <h3 style="margin-top: 1.5rem; color: #FBC02D;">📌 الخطوة 1: إنشاء مشروع Firebase</h3>
+        <div class="step"><span class="step-num">1</span> اذهب إلى <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a></div>
+        <div class="step"><span class="step-num">2</span> اضغط <strong>"Add Project"</strong></div>
+        <div class="step"><span class="step-num">3</span> اكتب اسم المشروع: <code>nawaqes-app</code></div>
+        <div class="step"><span class="step-num">4</span> اضغط Continue → عطّل Google Analytics → <strong>Create Project</strong></div>
+        <div class="step"><span class="step-num">5</span> انتظر 30 ثانية، ثم اضغط <strong>Continue</strong></div>
+
+        <h3 style="margin-top: 1.5rem; color: #FBC02D;">📌 الخطوة 2: إضافة تطبيق Web</h3>
+        <div class="step"><span class="step-num">1</span> من الصفحة الرئيسية، اضغط أيقونة <strong>&lt;/&gt;</strong></div>
+        <div class="step"><span class="step-num">2</span> App nickname: <code>Nawaqes Web</code></div>
+        <div class="step"><span class="step-num">3</span> اضغط <strong>Register app</strong></div>
+        <div class="step"><span class="step-num">4</span> سترى كود JavaScript مع <code>firebaseConfig</code> — <strong>انسخه كاملاً</strong></div>
+        <div class="step"><span class="step-num">5</span> انتقل لتبويب <strong>"🔐 بيانات Firebase"</strong> والصق الكود</div>
+
+        <h3 style="margin-top: 1.5rem; color: #FBC02D;">📌 الخطوة 3: إضافة تطبيق Android</h3>
+        <div class="step"><span class="step-num">1</span> من Project Settings: <strong>Add app → Android</strong></div>
+        <div class="step"><span class="step-num">2</span> Android package name: <code>com.nawaqes.app</code></div>
+        <div class="step"><span class="step-num">3</span> App nickname: <code>Nawaqes</code></div>
+        <div class="step"><span class="step-num">4</span> اضغط <strong>Register app</strong></div>
+        <div class="step"><span class="step-num">5</span> <strong>حمّل ملف <code>google-services.json</code></strong></div>
+        <div class="step"><span class="step-num">6</span> انتقل لتبويب <strong>"📦 google-services.json"</strong> وارفع الملف</div>
+
+        <h3 style="margin-top: 1.5rem; color: #FBC02D;">📌 الخطوة 4: إنشاء VAPID Key</h3>
+        <div class="step"><span class="step-num">1</span> من القائمة: <strong>Engage → Cloud Messaging</strong></div>
+        <div class="step"><span class="step-num">2</span> اذهب لتبويب <strong>Web Configuration</strong></div>
+        <div class="step"><span class="step-num">3</span> تحت <strong>Web Push certificates</strong> اضغط <strong>Generate key pair</strong></div>
+        <div class="step"><span class="step-num">4</span> <strong>انسخ الـ Key pair</strong> (يبدأ بـ <code>BJ...</code>)</div>
+        <div class="step"><span class="step-num">5</span> انتقل لتبويب <strong>"🔔 VAPID Key"</strong> والصقه</div>
+
+        <h3 style="margin-top: 1.5rem; color: #FBC02D;">📌 الخطوة 5: Service Account</h3>
+        <div class="step"><span class="step-num">1</span> اذهب إلى <strong>Project Settings → Service Accounts</strong></div>
+        <div class="step"><span class="step-num">2</span> اضغط <strong>Generate new private key</strong> → <strong>Generate key</strong></div>
+        <div class="step"><span class="step-num">3</span> سيُحمّل ملف JSON</div>
+        <div class="step"><span class="step-num">4</span> انتقل لتبويب <strong>"⚙️ Service Account"</strong> وارفع الملف</div>
+      </div>
+
+      <div style="text-align: center; margin-top: 1rem;">
+        <button class="btn" onclick="showTab(1)">التالي: أدخل بيانات Firebase ←</button>
+      </div>
+    </div>
+
+    <!-- Tab 1: firebaseConfig -->
+    <div class="tab-content" id="tab1">
+      <div class="section">
+        <h2>🔐 بيانات Firebase Web Config</h2>
+        <p style="color: rgba(255,255,255,0.7); margin-bottom: 1rem;">الصق كود JavaScript بالكامل الذي حصلت عليه من Firebase Console (يحتوي على apiKey, authDomain, ...).</p>
+
+        <div class="field">
+          <label>firebaseConfig (JavaScript object) <span class="hint">— الصق الكود كاملاً</span></label>
+          <textarea id="firebaseConfig" placeholder="// مثال:
+const firebaseConfig = {
+  apiKey: &quot;AIzaSyXXXXXXXXXXXXXX&quot;,
+  authDomain: &quot;nawaqes-app.firebaseapp.com&quot;,
+  projectId: &quot;nawaqes-app&quot;,
+  storageBucket: &quot;nawaqes-app.appspot.com&quot;,
+  messagingSenderId: &quot;123456789012&quot;,
+  appId: &quot;1:123456789012:web:abcdef123456&quot;
+};"></textarea>
+        </div>
+
+        <div class="alert alert-info" id="parseResult">
+          📋 الصق الكود أعلاه ليتم استخراج القيم تلقائياً
+        </div>
+
+        <div id="parsedFields" style="display: none;">
+          <h3 style="color: #4ade80; margin-top: 1rem;">✅ تم استخراج القيم بنجاح:</h3>
+          <div class="field">
+            <label>API Key</label>
+            <input type="text" id="apiKey" readonly />
+          </div>
+          <div class="field">
+            <label>Auth Domain</label>
+            <input type="text" id="authDomain" readonly />
+          </div>
+          <div class="field">
+            <label>Project ID</label>
+            <input type="text" id="projectId" readonly />
+          </div>
+          <div class="field">
+            <label>Storage Bucket</label>
+            <input type="text" id="storageBucket" readonly />
+          </div>
+          <div class="field">
+            <label>Messaging Sender ID</label>
+            <input type="text" id="messagingSenderId" readonly />
+          </div>
+          <div class="field">
+            <label>App ID</label>
+            <input type="text" id="appId" readonly />
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align: center;">
+        <button class="btn btn-secondary" onclick="showTab(0)">→ السابق</button>
+        <button class="btn" id="next1" onclick="showTab(2)" disabled>التالي: google-services.json ←</button>
+      </div>
+    </div>
+
+    <!-- Tab 2: google-services.json -->
+    <div class="tab-content" id="tab2">
+      <div class="section">
+        <h2>📦 رفع google-services.json</h2>
+        <p style="color: rgba(255,255,255,0.7); margin-bottom: 1rem;">ارفع ملف <code>google-services.json</code> الذي حمّلته من Firebase Console.</p>
+
+        <div class="field">
+          <label>ملف google-services.json</label>
+          <input type="file" id="googleServicesFile" accept=".json" />
+        </div>
+
+        <div class="alert alert-info" id="gsResult">
+          📦 اختر الملف للتحقق منه تلقائياً
+        </div>
+
+        <div id="gsInfo" style="display: none;">
+          <h3 style="color: #4ade80;">✅ ملف صحيح:</h3>
+          <div class="field">
+            <label>Package Name</label>
+            <input type="text" id="gsPackage" readonly />
+          </div>
+          <div class="field">
+            <label>Mobile SDK App ID</label>
+            <input type="text" id="gsAppId" readonly />
+          </div>
+          <div class="field">
+            <label>API Key</label>
+            <input type="text" id="gsApiKey" readonly />
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align: center;">
+        <button class="btn btn-secondary" onclick="showTab(1)">→ السابق</button>
+        <button class="btn" id="next2" onclick="showTab(3)" disabled>التالي: VAPID Key ←</button>
+      </div>
+    </div>
+
+    <!-- Tab 3: VAPID Key -->
+    <div class="tab-content" id="tab3">
+      <div class="section">
+        <h2>🔔 VAPID Key (Web Push)</h2>
+        <p style="color: rgba(255,255,255,0.7); margin-bottom: 1rem;">الصق الـ VAPID Key الذي أنشأته من <strong>Cloud Messaging → Web Configuration</strong>.</p>
+
+        <div class="field">
+          <label>VAPID Key <span class="hint">— يبدأ عادة بـ BJ...</span></label>
+          <input type="text" id="vapidKey" placeholder="BJXXXXXXXXXXXXXXXXXXXXXX..." />
+        </div>
+
+        <div class="alert alert-info" id="vapidResult">
+          🔔 الصق الـ VAPID Key
+        </div>
+      </div>
+
+      <div style="text-align: center;">
+        <button class="btn btn-secondary" onclick="showTab(2)">→ السابق</button>
+        <button class="btn" id="next3" onclick="showTab(4)" disabled>التالي: Service Account ←</button>
+      </div>
+    </div>
+
+    <!-- Tab 4: Service Account -->
+    <div class="tab-content" id="tab4">
+      <div class="section">
+        <h2>⚙️ Service Account JSON</h2>
+        <p style="color: rgba(255,255,255,0.7); margin-bottom: 1rem;">ارفع ملف Service Account JSON (للسماح للسيرفر بإرسال الإشعارات).</p>
+
+        <div class="alert alert-warning">
+          ⚠️ <strong>تنبيه أمني مهم:</strong> هذا الملف يحتوي على صلاحيات إدارة المشروع! لا تشاركه علناً.
+        </div>
+
+        <div class="field">
+          <label>Service Account JSON file</label>
+          <input type="file" id="serviceAccountFile" accept=".json" />
+        </div>
+
+        <div class="alert alert-info" id="saResult">
+          ⚙️ اختر الملف للتحقق منه
+        </div>
+
+        <div id="saInfo" style="display: none;">
+          <h3 style="color: #4ade80;">✅ ملف صحيح:</h3>
+          <div class="field">
+            <label>Client Email</label>
+            <input type="text" id="saEmail" readonly />
+          </div>
+          <div class="field">
+            <label>Project ID</label>
+            <input type="text" id="saProjectId" readonly />
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align: center;">
+        <button class="btn btn-secondary" onclick="showTab(3)">→ السابق</button>
+        <button class="btn" id="next4" onclick="showTab(5)" disabled>التالي: تطبيق وبناء ←</button>
+      </div>
+    </div>
+
+    <!-- Tab 5: Apply & Build -->
+    <div class="tab-content" id="tab5">
+      <div class="section">
+        <h2>🚀 مراجعة وتطبيق البيانات</h2>
+        <p style="color: rgba(255,255,255,0.7); margin-bottom: 1rem;">راجع جميع البيانات قبل التطبيق، ثم حمّل ملف الإعداد الكامل.</p>
+
+        <div id="reviewContent">
+          <p style="color: #fca5a5;">أكمل الخطوات السابقة أولاً</p>
+        </div>
+
+        <div class="alert alert-success" id="readyToBuild" style="display: none;">
+          ✅ جميع البيانات جاهزة! اضغط الزر أدناه لتحميل ملف الإعداد الكامل.
+        </div>
+
+        <div style="text-align: center; margin-top: 1.5rem;">
+          <button class="btn btn-success" id="downloadConfig" onclick="downloadConfig()" disabled>
+            ⬇️ تحميل ملف الإعداد الكامل
+          </button>
+        </div>
+
+        <div class="alert alert-info" style="margin-top: 1.5rem;">
+          <strong>📋 التعليمات بعد التحميل:</strong>
+          <ol style="margin: 0.5rem 1.5rem;">
+            <li>بعد تحميل ملف <code>nawaqes-firebase-config.json</code>، أرسله لي في المحادثة</li>
+            <li>سأطبق الإعداد تلقائياً وأبني APK جديد مع Firebase</li>
+            <li>سأرفع APK الجديد على HF Spaces</li>
+            <li>سأضيف متغيرات البيئة على HF Space</li>
+            <li>ستصلك الإشعارات الفورية على التطبيق</li>
+          </ol>
+        </div>
+      </div>
+
+      <div style="text-align: center;">
+        <button class="btn btn-secondary" onclick="showTab(4)">→ السابق</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>© 2026 نواقص | <a href="/">العودة للتطبيق</a> | <a href="/install">صفحة التثبيت</a></p>
+    </div>
+  </div>
+
+  <script>
+    // State
+    const state = {
+      firebaseConfig: null,
+      googleServices: null,
+      vapidKey: '',
+      serviceAccount: null,
+    };
+
+    function showTab(idx) {
+      document.querySelectorAll('.tab-content').forEach((t, i) => {
+        t.classList.toggle('active', i === idx);
+      });
+      document.querySelectorAll('.tab').forEach((t, i) => {
+        t.classList.toggle('active', i === idx);
+      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function updateProgress() {
+      let done = 0;
+      if (state.firebaseConfig) done++;
+      if (state.googleServices) done++;
+      if (state.vapidKey) done++;
+      if (state.serviceAccount) done++;
+
+      const pct = (done / 5) * 100; // 5 steps including build
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressText').textContent = Math.round(pct) + '% مكتمل';
+
+      ['status1','status2','status3','status4'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (i < done) {
+          el.className = 'status-badge status-done';
+          el.textContent = '✓';
+        } else {
+          el.className = 'status-badge status-pending';
+          el.textContent = (i+1);
+        }
+      });
+
+      if (done === 4) {
+        document.getElementById('status5').className = 'status-badge status-done';
+        document.getElementById('status5').textContent = '✓';
+        document.getElementById('readyToBuild').style.display = 'block';
+        document.getElementById('downloadConfig').disabled = false;
+        updateReview();
+      }
+    }
+
+    // Parse firebaseConfig
+    document.getElementById('firebaseConfig').addEventListener('input', (e) => {
+      const text = e.target.value;
+      try {
+        // Extract just the object part
+        const match = text.match(/const\s+firebaseConfig\s*=\s*(\{[\s\S]*?\});/);
+        const objStr = match ? match[1] : text;
+        // Use Function to safely parse (avoiding eval)
+        const parsed = new Function('return ' + objStr)();
+
+        if (parsed.apiKey && parsed.projectId) {
+          state.firebaseConfig = parsed;
+          document.getElementById('apiKey').value = parsed.apiKey;
+          document.getElementById('authDomain').value = parsed.authDomain || '';
+          document.getElementById('projectId').value = parsed.projectId;
+          document.getElementById('storageBucket').value = parsed.storageBucket || '';
+          document.getElementById('messagingSenderId').value = parsed.messagingSenderId || '';
+          document.getElementById('appId').value = parsed.appId || '';
+
+          document.getElementById('parsedFields').style.display = 'block';
+          document.getElementById('parseResult').className = 'alert alert-success';
+          document.getElementById('parseResult').textContent = '✅ تم استخراج جميع القيم بنجاح!';
+          document.getElementById('next1').disabled = false;
+          updateProgress();
+        } else {
+          document.getElementById('parseResult').className = 'alert alert-error';
+          document.getElementById('parseResult').textContent = '❌ البيانات غير مكتملة. تأكد من وجود apiKey و projectId';
+        }
+      } catch (err) {
+        document.getElementById('parseResult').className = 'alert alert-error';
+        document.getElementById('parseResult').textContent = '❌ كود غير صالح: ' + err.message;
+      }
+    });
+
+    // Parse google-services.json
+    document.getElementById('googleServicesFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        if (data.project_info && data.client && data.client[0]) {
+          state.googleServices = data;
+          const client = data.client[0];
+          document.getElementById('gsPackage').value = client.client_info.android_client_info.package_name;
+          document.getElementById('gsAppId').value = client.client_info.mobilesdk_app_id;
+          document.getElementById('gsApiKey').value = data.client[0].api_key[0].current_key;
+
+          document.getElementById('gsInfo').style.display = 'block';
+          document.getElementById('gsResult').className = 'alert alert-success';
+          document.getElementById('gsResult').textContent = '✅ ملف google-services.json صحيح!';
+          document.getElementById('next2').disabled = false;
+          updateProgress();
+        } else {
+          throw new Error('Invalid structure');
+        }
+      } catch (err) {
+        document.getElementById('gsResult').className = 'alert alert-error';
+        document.getElementById('gsResult').textContent = '❌ ملف غير صالح: ' + err.message;
+      }
+    });
+
+    // VAPID key
+    document.getElementById('vapidKey').addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      if (val.length > 50) {
+        state.vapidKey = val;
+        document.getElementById('vapidResult').className = 'alert alert-success';
+        document.getElementById('vapidResult').textContent = '✅ VAPID Key صحيح (' + val.length + ' حرف)';
+        document.getElementById('next3').disabled = false;
+        updateProgress();
+      } else {
+        document.getElementById('vapidResult').className = 'alert alert-warning';
+        document.getElementById('vapidResult').textContent = '⚠️ VAPID Key قصير جداً (يجب أن يكون 100+ حرف)';
+      }
+    });
+
+    // Service Account
+    document.getElementById('serviceAccountFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+
+        if (data.client_email && data.private_key && data.project_id) {
+          state.serviceAccount = data;
+          document.getElementById('saEmail').value = data.client_email;
+          document.getElementById('saProjectId').value = data.project_id;
+
+          document.getElementById('saInfo').style.display = 'block';
+          document.getElementById('saResult').className = 'alert alert-success';
+          document.getElementById('saResult').textContent = '✅ Service Account JSON صحيح!';
+          document.getElementById('next4').disabled = false;
+          updateProgress();
+        } else {
+          throw new Error('Missing required fields');
+        }
+      } catch (err) {
+        document.getElementById('saResult').className = 'alert alert-error';
+        document.getElementById('saResult').textContent = '❌ ملف غير صالح: ' + err.message;
+      }
+    });
+
+    function updateReview() {
+      const html = `
+        <h3 style="color: #FBC02D; margin-bottom: 1rem;">📋 مراجعة البيانات:</h3>
+        <div class="field">
+          <label>Project ID</label>
+          <input type="text" value="${state.firebaseConfig?.projectId || ''}" readonly />
+        </div>
+        <div class="field">
+          <label>API Key</label>
+          <input type="text" value="${state.firebaseConfig?.apiKey || ''}" readonly />
+        </div>
+        <div class="field">
+          <label>App ID (Web)</label>
+          <input type="text" value="${state.firebaseConfig?.appId || ''}" readonly />
+        </div>
+        <div class="field">
+          <label>Android Package Name</label>
+          <input type="text" value="${state.googleServices?.client?.[0]?.client_info?.android_client_info?.package_name || ''}" readonly />
+        </div>
+        <div class="field">
+          <label>VAPID Key</label>
+          <input type="text" value="${state.vapidKey ? state.vapidKey.substring(0, 50) + '...' : ''}" readonly />
+        </div>
+        <div class="field">
+          <label>Service Account Email</label>
+          <input type="text" value="${state.serviceAccount?.client_email || ''}" readonly />
+        </div>
+      `;
+      document.getElementById('reviewContent').innerHTML = html;
+    }
+
+    function downloadConfig() {
+      const config = {
+        generated_at: new Date().toISOString(),
+        firebase_config: state.firebaseConfig,
+        google_services: state.googleServices,
+        vapid_key: state.vapidKey,
+        service_account: state.serviceAccount,
+      };
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'nawaqes-firebase-config.json';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      alert('✅ تم تحميل ملف الإعداد!\n\nالآن:\n1. أرسل الملف في المحادثة\n2. سأطبق الإعداد وأبني APK جديد مع Firebase');
+    }
+  </script>
+</body>
+</html>

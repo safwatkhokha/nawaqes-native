@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#DC2626" />
+  <title>إعداد Firebase | نواقص</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, 'Noto Sans Arabic', sans-serif;
+      background: linear-gradient(135deg, #1e0c0c 0%, #2d1212 100%);
+      color: #fff;
+      min-height: 100vh;
+      padding: 1.5rem;
+      line-height: 1.8;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 2rem 0; }
+    .header { text-align: center; margin-bottom: 3rem; }
+    .logo {
+      width: 80px; height: 80px;
+      margin: 0 auto 1rem;
+      background: linear-gradient(135deg, #FBC02D, #DC2626);
+      border-radius: 20%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.5rem; color: white; font-weight: bold;
+      box-shadow: 0 10px 30px rgba(220,38,38,0.4);
+    }
+    h1 {
+      font-size: 2rem;
+      background: linear-gradient(135deg, #FBC02D, #F59E0B);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+    }
+    .subtitle { color: rgba(255,255,255,0.7); }
+    .section {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(10px);
+    }
+    .section h2 {
+      color: #FBC02D;
+      margin-bottom: 1rem;
+      font-size: 1.3rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section h3 {
+      color: #fff;
+      margin: 1.5rem 0 0.5rem;
+      font-size: 1.05rem;
+    }
+    .step {
+      background: rgba(220,38,38,0.1);
+      border-right: 4px solid #DC2626;
+      padding: 1rem 1.5rem;
+      margin: 1rem 0;
+      border-radius: 8px;
+    }
+    .step-num {
+      display: inline-block;
+      width: 28px; height: 28px;
+      background: linear-gradient(135deg, #DC2626, #B91C1C);
+      color: white;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 28px;
+      font-weight: bold;
+      margin-left: 0.5rem;
+    }
+    .code {
+      background: #0d0606;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      color: #FBC02D;
+      overflow-x: auto;
+      margin: 0.5rem 0;
+      direction: ltr;
+      text-align: left;
+    }
+    .alert {
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 1rem 0;
+    }
+    .alert-warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #FBC02D;
+    }
+    .alert-info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .btn {
+      display: inline-block;
+      padding: 0.8rem 1.5rem;
+      background: linear-gradient(135deg, #DC2626, #B91C1C);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 700;
+      margin: 0.3rem 0.3rem 0.3rem 0;
+      transition: transform 0.2s;
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+    .footer {
+      text-align: center;
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.5);
+    }
+    ul { margin: 0.5rem 1.5rem; }
+    li { margin: 0.3rem 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">🔥</div>
+      <h1>إعداد Firebase Push Notifications</h1>
+      <p class="subtitle">دليل تفاعلي خطوة بخطوة لإضافة الإشعارات الفورية لتطبيق نواقص</p>
+    </div>
+
+    <div class="alert alert-info">
+      💡 <strong>لماذا Firebase؟</strong> — الإشعارات الفورية تتيح للمستخدمين تلقي تنبيهات فورية عند:
+      <ul>
+        <li>💬 وصول رسالة جديدة</li>
+        <li>❤️ إعجاب أو تعليق على منشوراتهم</li>
+        <li>📢 عروض خاصة من السوق</li>
+        <li>💰 تأكيد شحن المحفظة</li>
+        <li>🔔 إعلانات من الإدارة</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2>📋 المتطلبات الأساسية</h2>
+      <ul>
+        <li>حساب Google (مجاني)</li>
+        <li>الوصول لإدارة تطبيق نواقص على HF Spaces</li>
+        <li>صلاحية لتعديل ملفات المشروع</li>
+      </ul>
+    </div>
+
+    <div class="section">
+      <h2><span class="step-num">1</span> إنشاء مشروع Firebase</h2>
+      <div class="step">
+        <strong>1.1</strong> اذهب إلى <a href="https://console.firebase.google.com" target="_blank" style="color:#FBC02D">Firebase Console</a>
+      </div>
+      <div class="step">
+        <strong>1.2</strong> اضغط <strong>"Add Project"</strong> (إضافة مشروع)
+      </div>
+      <div class="step">
+        <strong>1.3</strong> اكتب اسم المشروع: <code>nawaqes-app</code>
+      </div>
+      <div class="step">
+        <strong>1.4</strong> اضغط Continue → عطّل Google Analytics → اضغط <strong>Create Project</strong>
+      </div>
+      <div class="step">
+        <strong>1.5</strong> انتظر 30 ثانية حتى يُنشأ المشروع، ثم اضغط <strong>Continue</strong>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2><span class="step-num">2</span> إضافة تطبيق Web (للإشعارات في المتصفح)</h2>
+      <div class="step">
+        <strong>2.1</strong> من الصفحة الرئيسية للمشروع، اضغط أيقونة <strong>&lt;/&gt;</strong> (Web)
+      </div>
+      <div class="step">
+        <strong>2.2</strong> App nickname: <code>Nawaqes Web</code> → اضغط <strong>Register app</strong>
+      </div>
+      <div class="step">
+        <strong>2.3</strong> ستظهر لك <code>firebaseConfig</code> — <strong>انسخها</strong> (ستحتاجها لاحقاً):
+      </div>
+      <div class="code">
+const firebaseConfig = {
+  apiKey: "AIzaSyXXXXXXXXXXXX",
+  authDomain: "nawaqes-app.firebaseapp.com",
+  projectId: "nawaqes-app",
+  storageBucket: "nawaqes-app.appspot.com",
+  messagingSenderId: "123456789012",
+  appId: "1:123456789012:web:abcdef123456"
+};
+      </div>
+    </div>
+
+    <div class="section">
+      <h2><span class="step-num">3</span> تفعيل Cloud Messaging وإنشاء VAPID Key</h2>
+      <div class="step">
+        <strong>3.1</strong> من القائمة الجانبية: <strong>Engage → Cloud Messaging</strong>
+      </div>
+      <div class="step">
+        <strong>3.2</strong> تأكد أن <strong>Firebase Cloud Messaging API (V1)</strong> مفعّل (افتراضياً مفعّل للمشاريع الجديدة)
+      </div>
+      <div class="step">
+        <strong>3.3</strong> اذهب إلى تبويب <strong>Web Configuration</strong>
+      </div>
+      <div class="step">
+        <strong>3.4</strong> تحت <strong>Web Push certificates</strong>، اضغط <strong>Generate key pair</strong>
+      </div>
+      <div class="step">
+        <strong>3.5</strong> <strong>انسخ الـ VAPID key</strong> (يبدأ بـ <code>BJ...</code>)
+      </div>
+    </div>
+
+    <div class="section">
+      <h2><span class="step-num">4</span> إضافة تطبيق Android (للإشعارات في APK)</h2>
+      <div class="step">
+        <strong>4.1</strong> من إعدادات المشروع: <strong>Project Settings ⚙️ → Add app → Android</strong>
+      </div>
+      <div class="step">
+        <strong>4.2</strong> املأ البيانات:
+        <ul>
+          <li>Android package name: <code>com.nawaqes.app</code></li>
+          <li>App nickname: <code>Nawaqes</code></li>
+        </ul>
+      </div>
+      <div class="step">
+        <strong>4.3</strong> اضغط <strong>Register app</strong>
+      </div>
+      <div class="step">
+        <strong>4.4</strong> حمّل ملف <code>google-services.json</code>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2><span class="step-num">5</span> إعداد Service Account (لإرسال الإشعارات من السيرفر)</h2>
+      <div class="step">
+        <strong>5.1</strong> اذهب إلى <strong>Project Settings → Service Accounts</strong>
+      </div>
+      <div class="step">
+        <strong>5.2</strong> اضغط <strong>Generate new private key</strong> → <strong>Generate key</strong>
+      </div>
+      <div class="step">
+        <strong>5.3</strong> سيُحمّل ملف JSON — احفظه بأمان (يحتوي صلاحيات إدارة المشروع)
+      </div>
+    </div>
+
+    <div class="section">
+      <h2><span class="step-num">6</span> إضافة المتغيرات على Hugging Face Spaces</h2>
+      <div class="step">
+        <strong>6.1</strong> اذهب إلى: <a href="https://huggingface.co/spaces/safwatkhokha/nawaqes/settings" target="_blank" style="color:#FBC02D">إعدادات الـ Space</a>
+      </div>
+      <div class="step">
+        <strong>6.2</strong> ابحث عن قسم <strong>"Variables and secrets"</strong>
+      </div>
+      <div class="step">
+        <strong>6.3</strong> أضف المتغيرات التالية (استبدل القيم بالتي حصلت عليها):
+      </div>
+      <div class="code">
+FIREBASE_PROJECT_ID = nawaqes-app
+FIREBASE_API_KEY = AIzaSyXXXXXXXXXXXX
+FIREBASE_AUTH_DOMAIN = nawaqes-app.firebaseapp.com
+FIREBASE_STORAGE_BUCKET = nawaqes-app.appspot.com
+FIREBASE_MESSAGING_SENDER_ID = 123456789012
+FIREBASE_APP_ID = 1:123456789012:web:abcdef123456
+FIREBASE_VAPID_KEY = BJXXXXXXXXXXXX
+      </div>
+      <div class="step">
+        <strong>6.4</strong> اضغط <strong>Save</strong> — سيُعاد بناء السيرفر تلقائياً
+      </div>
+    </div>
+
+    <div class="section">
+      <h2><span class="step-num">7</span> تحديث APK بإضافة Firebase</h2>
+      <div class="step">
+        <strong>7.1</strong> انسخ ملف <code>google-services.json</code> إلى مجلد المشروع:
+      </div>
+      <div class="code">/home/z/my-project/nawaqes-apk/webview-apk/app/google-services.json</div>
+      <div class="step">
+        <strong>7.2</strong> أعد بناء APK:
+      </div>
+      <div class="code">cd /home/z/my-project/nawaqes-apk/webview-apk
+./gradlew assembleRelease</div>
+      <div class="step">
+        <strong>7.3</strong> ارفع APK الجديد على السيرفر:
+      </div>
+      <div class="code">cp app/build/outputs/apk/release/app-release.apk \
+   /home/z/my-project/nawaqes/downloads/nawaqes-v3.1.0-fcm.apk
+git add downloads/nawaqes-v3.1.0-fcm.apk
+git commit -m "Update APK with Firebase"
+git push</div>
+    </div>
+
+    <div class="section">
+      <h2><span class="step-num">8</span> اختبار الإشعارات</h2>
+      <div class="step">
+        <strong>8.1</strong> افتح التطبيق: <a href="https://safwatkhokha-nawaqes.hf.space" target="_blank" style="color:#FBC02D">https://safwatkhokha-nawaqes.hf.space</a>
+      </div>
+      <div class="step">
+        <strong>8.2</strong> سجّل دخولك → اذهب للإعدادات → فعّل الإشعارات
+      </div>
+      <div class="step">
+        <strong>8.3</strong> اسمح بالإشعارات من المتصفح/النظام
+      </div>
+      <div class="step">
+        <strong>8.4</strong> افتح Console المتصفح (F12) وستجد: <code>[FCM] Web device token: xxxx</code>
+      </div>
+      <div class="step">
+        <strong>8.5</strong> اختبر الإرسال عبر سكريبت الاختبار:
+      </div>
+      <div class="code">node /home/z/my-project/nawaqes-apk/firebase/test-push.js YOUR_DEVICE_TOKEN</div>
+    </div>
+
+    <div class="alert alert-warning">
+      ⚠️ <strong>تنبيه أمني:</strong>
+      <ul>
+        <li>لا تشارك ملف <code>google-services.json</code> أو Service Account JSON علناً</li>
+        <li>لا ترفع Service Account JSON على Git — استخدم HF Secrets فقط</li>
+        <li>الـ VAPID key آمن للنشر في الكود (وليس سرّاً)</li>
+      </ul>
+    </div>
+
+    <div class="footer">
+      <p>
+        <a href="/" class="btn">🏠 العودة للتطبيق</a>
+        <a href="/install" class="btn btn-secondary">📱 صفحة التثبيت</a>
+      </p>
+      <p style="margin-top:1rem">© 2026 نواقص | <a href="/help" style="color:#FBC02D">المساعدة</a></p>
+    </div>
+  </div>
+</body>
+</html>
