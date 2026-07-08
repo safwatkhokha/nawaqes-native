@@ -1,12 +1,15 @@
 // ─── Profile Screen (Enhanced — TikTok-style) ───────────────────────
-// Cover photo + avatar + stats + tabs (posts/ads/saved) + menu
+// Cover photo + avatar + stats + tabs (posts/ads/saved/streams) + menu
+// + edit avatar/bio + cover photo change
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView,
   Image, Share, FlatList, Dimensions, RefreshControl, ActivityIndicator,
+  Modal, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../services/api';
 import {
@@ -31,13 +34,20 @@ interface UserPost {
 
 export default function ProfileScreen({ navigation }: any) {
   const { user, logout, refreshUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'posts' | 'ads' | 'saved'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'ads' | 'saved' | 'streams'>('posts');
   const [userPosts, setUserPosts] = useState<UserPost[]>([]);
   const [savedPosts, setSavedPosts] = useState<UserPost[]>([]);
+  const [myStreams, setMyStreams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [totalLikes, setTotalLikes] = useState(0);
+  const [totalViews, setTotalViews] = useState(0);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editBio, setEditBio] = useState('');
+  const [editName, setEditName] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const fixUrl = (u?: string) => u ? (u.startsWith('http') ? u : `https://safwatkhokha-nawaqes.hf.space${u}`) : undefined;
 
@@ -51,18 +61,25 @@ export default function ProfileScreen({ navigation }: any) {
       await refreshUser();
 
       // Get user's posts
-      const [postsRes, savedRes] = await Promise.all([
+      const [postsRes, savedRes, streamsRes] = await Promise.all([
         api.getFeed(1, 50).catch(() => ({ posts: [] })),
         api.getSavedPosts().catch(() => ({ posts: [] })),
+        api.getActiveStreams().catch(() => []),
       ]);
 
       const allPosts = (postsRes as any)?.posts || (postsRes as any) || [];
       const myPosts = allPosts.filter((p: any) => p.author?.id === user?.id);
-      const myAds = myPosts.filter((p: any) => p.type === 'ad');
       const saved = (savedRes as any)?.posts || (savedRes as any) || [];
+      const allStreams = (streamsRes as any[]) || [];
+      const myLiveStreams = allStreams.filter((s: any) => s.hostId === user?.id || s.host_id === user?.id);
 
       setUserPosts(myPosts);
       setSavedPosts(saved);
+      setMyStreams(myLiveStreams);
+
+      // Calculate stats
+      setTotalLikes(myPosts.reduce((s: number, p: any) => s + (p.likes || 0), 0));
+      setTotalViews(myPosts.reduce((s: number, p: any) => s + (p.views || p.view_count || 0), 0));
 
       // Get followers/following count
       try {
@@ -98,6 +115,60 @@ export default function ProfileScreen({ navigation }: any) {
     } catch {}
   };
 
+  // ─── Edit avatar ───────────────────────────────────────────────────
+  const handleChangeAvatar = async () => {
+    try {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) return;
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        allowsEditing: true,
+        aspect: [1, 1],
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const uploadRes = await api.uploadImage(result.assets[0].uri);
+      if (!uploadRes?.url) throw new Error('Upload failed');
+
+      await api.client.put('/auth/profile', { avatar: uploadRes.url });
+      await refreshUser();
+      Alert.alert('تم ✓', 'تم تحديث الصورة الشخصية');
+    } catch (e: any) {
+      Alert.alert('خطأ', e?.message || 'فشل تحديث الصورة');
+    }
+  };
+
+  // ─── Edit profile (name + bio) ─────────────────────────────────────
+  const handleOpenEdit = () => {
+    setEditName(user?.name || '');
+    setEditBio(user?.bio || '');
+    setShowEditModal(true);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
+      Alert.alert('تنبيه', 'الاسم مطلوب');
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      await api.client.put('/auth/profile', {
+        name: editName.trim(),
+        bio: editBio.trim(),
+      });
+      await refreshUser();
+      Alert.alert('تم ✓', 'تم تحديث الملف الشخصي');
+      setShowEditModal(false);
+    } catch (e: any) {
+      Alert.alert('خطأ', e?.response?.data?.error || 'فشل التحديث');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const formatTime = (iso: string) => {
     if (!iso) return '';
     const d = new Date(iso);
@@ -109,7 +180,7 @@ export default function ProfileScreen({ navigation }: any) {
   };
 
   // ─── Render post in grid ───────────────────────────────────────────
-  const currentPosts = activeTab === 'saved' ? savedPosts : (activeTab === 'ads' ? userPosts.filter(p => p.type === 'ad') : userPosts);
+  const currentPosts = activeTab === 'saved' ? savedPosts : (activeTab === 'ads' ? userPosts.filter(p => p.type === 'ad') : activeTab === 'streams' ? [] : userPosts);
 
   const renderGridItem = ({ item }: { item: UserPost }) => (
     <TouchableOpacity
@@ -183,7 +254,7 @@ export default function ProfileScreen({ navigation }: any) {
               source={{ uri: user?.avatar ? fixUrl(user.avatar) : `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.id || 'default'}` }}
               style={styles.avatar}
             />
-            <TouchableOpacity style={styles.editAvatarBtn} onPress={() => Alert.alert('قريباً', 'تحديث الصورة قيد التطوير')}>
+            <TouchableOpacity style={styles.editAvatarBtn} onPress={handleChangeAvatar}>
               <Edit3 color="#fff" size={12} />
             </TouchableOpacity>
           </View>
@@ -236,7 +307,7 @@ export default function ProfileScreen({ navigation }: any) {
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.editProfileBtn}
-            onPress={() => Alert.alert('قريباً', 'تحديث الملف الشخصي قيد التطوير')}
+            onPress={handleOpenEdit}
           >
             <Edit3 color="#fff" size={16} />
             <Text style={styles.editProfileText}>تعديل الملف</Text>
@@ -264,6 +335,13 @@ export default function ProfileScreen({ navigation }: any) {
           >
             <ShoppingBag color={activeTab === 'ads' ? '#f97316' : '#64748b'} size={20} />
             <Text style={[styles.tabText, activeTab === 'ads' && styles.tabTextActive]}>الإعلانات</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'streams' && styles.tabActive]}
+            onPress={() => setActiveTab('streams')}
+          >
+            <Radio color={activeTab === 'streams' ? '#f97316' : '#64748b'} size={20} />
+            <Text style={[styles.tabText, activeTab === 'streams' && styles.tabTextActive]}>بثوثي</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'saved' && styles.tabActive]}
@@ -342,6 +420,53 @@ export default function ProfileScreen({ navigation }: any) {
 
         <Text style={styles.versionText}>نواقص v2.5.0 (Native)</Text>
       </ScrollView>
+
+      {/* ═══ Edit Profile Modal ═══ */}
+      <Modal visible={showEditModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>تعديل الملف الشخصي</Text>
+              <TouchableOpacity onPress={() => setShowEditModal(false)}>
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding: 16, gap: 14 }}>
+              <View>
+                <Text style={styles.modalLabel}>الاسم</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="اسمك"
+                  placeholderTextColor="#64748b"
+                />
+              </View>
+              <View>
+                <Text style={styles.modalLabel}>النبذة الشخصية</Text>
+                <TextInput
+                  style={[styles.modalInput, { minHeight: 80 }]}
+                  value={editBio}
+                  onChangeText={setEditBio}
+                  placeholder="اكتب نبذة عنك..."
+                  placeholderTextColor="#64748b"
+                  multiline
+                  textAlignVertical="top"
+                  maxLength={200}
+                />
+                <Text style={styles.charCount}>{editBio.length}/200</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, savingProfile && styles.modalSaveBtnDisabled]}
+                onPress={handleSaveProfile}
+                disabled={savingProfile}
+              >
+                {savingProfile ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.modalSaveBtnText}>حفظ</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -471,4 +596,16 @@ const styles = StyleSheet.create({
   },
   logoutText: { color: '#ef4444', fontSize: 14, fontWeight: '700' },
   versionText: { textAlign: 'center', color: '#475569', fontSize: 11, marginTop: 20, marginBottom: 30 },
+  // Edit modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#1e293b', borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 20 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#334155' },
+  modalTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  modalCloseText: { color: '#94a3b8', fontSize: 18 },
+  modalLabel: { color: '#94a3b8', fontSize: 12, fontWeight: '700', marginBottom: 6 },
+  modalInput: { backgroundColor: '#0f172a', borderRadius: 10, padding: 12, color: '#fff', fontSize: 14, borderWidth: 1, borderColor: '#334155' },
+  charCount: { color: '#64748b', fontSize: 10, textAlign: 'right', marginTop: 4 },
+  modalSaveBtn: { backgroundColor: '#f97316', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  modalSaveBtnDisabled: { opacity: 0.6 },
+  modalSaveBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });
